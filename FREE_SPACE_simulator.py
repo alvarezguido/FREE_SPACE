@@ -33,13 +33,14 @@ import re
 
 ####WE START BY USING SF=12 ADN BW=125 AND CR=1, FOR ALL NODES AND ALL TRANSMISIONS######
 ####WE ALSO CONSIDER SIMPLE CHECK, WHERE TWO PACKETS COLLIDE WHEN THEY ARRIVE AT: SAME TIME, SAME FREQUENCY AND SAME SF####
-nrNodes = 1500 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
+nrNodes = 5 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
 #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
 RANDOM_SEED = 6
 random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUMBERS (ie SAME RESULTS OF SIMULATION)
 
-plots = 0 ## FOR PLOT SIMULATION
-
+###PLOTS ##
+plots_nodes = 0 ## FOR PLOT SIMULATION
+plots_bar = 0 ##FOR PLOT BARS RESULTS OF SIMULATION
 full_collision = False
 
 ###GLOBAL PARAMS ####
@@ -416,25 +417,26 @@ print ("Number of total lost packets (due Lpl) (nrLost)",nrLost)
 print ("Number of total processed packets (nrProcessed)",nrProcessed)
 print ("Number of total received packets (correct demodulation on gw) (nrReceived)",nrReceived)
 
-#### BAR PLOTS ####
-data = [sent,nrLost,nrCollisions,nrProcessed,nrReceived]
-plt.figure(figsize=(6, 4), dpi= 80, facecolor='w', edgecolor='k')
-#fig = plt.subplot(2,2,1)
-x = ["Sent","Lost(Lpl)","Collided","Processed","Received"]
-#y_pos = np.arange(len(x))
-plt.bar(x, data, color=["darkgreen","red","red","seagreen","springgreen"], align="center",width=0.25)
-plt.title("N° nodes: %i"%nrNodes)
-plt.xlabel('Packets')
-plt.ylabel('N° of packets')
-axes = plt.gca()
-#axes.set_xlim([0,xmax])
-axes.set_ylim([0,5000])
-#plt.ylim(100)
-#yint = range(min(sf_dist), math.ceil(max(sf_dist))+1)
-#plt.yticks(yint)
-plt.grid()
-plt.show()
-plt.savefig("bar.png")
+if plots_bar == 1:
+    #### BAR PLOTS ####
+    data = [sent,nrLost,nrCollisions,nrProcessed,nrReceived]
+    plt.figure(figsize=(6, 4), dpi= 80, facecolor='w', edgecolor='k')
+    #fig = plt.subplot(2,2,1)
+    x = ["Sent","Lost(Lpl)","Collided","Processed","Received"]
+    #y_pos = np.arange(len(x))
+    plt.bar(x, data, color=["darkgreen","red","red","seagreen","springgreen"], align="center",width=0.25)
+    plt.title("N° nodes: %i"%nrNodes)
+    plt.xlabel('Packets')
+    plt.ylabel('N° of packets')
+    axes = plt.gca()
+    #axes.set_xlim([0,xmax])
+    axes.set_ylim([0,5000])
+    #plt.ylim(100)
+    #yint = range(min(sf_dist), math.ceil(max(sf_dist))+1)
+    #plt.yticks(yint)
+    plt.grid()
+    plt.show()
+    plt.savefig("bar.png")
 
 
 # =============================================================================
@@ -488,7 +490,7 @@ node_worst =int(np.where(Prx == np.amin(Prx))[0])
 #SELECT NODE TO BE PLOTED
 node = 10 #SELECT NODE TO PLOT IN 3D
 
-if plots == 1:
+if plots_nodes == 1:
     
     ###2D GRAPHIC  
     plt.figure(1)
