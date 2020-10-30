@@ -90,7 +90,7 @@ sf12 = np.array([12,-137,-134,-131.0])
 sensi = np.array([sf7,sf8,sf9,sf10,sf11,sf12])
 
 ## READ PARAMS FROM DIRECTORY ##
-path = "./wider_scenario/"
+path = "./narrow_scenario/"
 
 ### -137dB IS THE MINIMUN TOLERABLE SENSIBILITY, FOR SF=12 AND BW=125KHz ###
 
@@ -106,7 +106,7 @@ sites_pos = np.loadtxt( path + "SITES-XYZ-Pos.csv",skiprows=1,delimiter=',',usec
         ## i --> the node i
         ## j --> 0 for x-position, 1 for y-position, 2 for z-position
 
-####INTENTAR USAR MATRIZ TRANSPUESTA O ALGUNA SOLUCION MÁS EFICIENTE QUE EL FOR###
+
 dist_sat = np.zeros((sites_pos.shape[0],3,leo_pos.shape[0]))
 t = 0
 for i in range(leo_pos.shape[0]):
@@ -219,15 +219,12 @@ def sfCollision(p1, p2):
 
 class myNode():
     def __init__(self, nodeid, bs, avgSendTime, packetlen, total_data):
-        global delta
         self.nodeid = nodeid
         self.avgSendTime = avgSendTime
         self.bs = bs
         self.dist = distance[nodeid,:]
         self.mindist = np.amin(distance[nodeid,:])
         self.mindist_pos = int(np.where(distance[nodeid,:] == np.amin(distance[nodeid,:]))[0])
-        #self.start_time = self.mindist_pos-delta
-        #self.end_time = self.mindist_pos+delta
         #print('node %d' %nodeid, "dist: ", self.dist[0])
         self.buffer = total_data
         self.packetlen = packetlen
@@ -400,11 +397,11 @@ def beacon (env):
 
 ###PLEASE UNCOMMENT FOR REGULAR FUNCIONALITY           
 env.process(beacon(env)) ##BEACON SENDER
-### THIS FOR IS GOING TO CREATE NODES AND DO TRAMSMISIONS. IS THE MAIN PROGRAM ###
+
+### THIS IS GOING TO CREATE NODES AND DO TRAMSMISIONS. IS THE MAIN PROGRAM ###
 for i in range(nrNodes):
     node = myNode(i,bsId, avgSendTime, packetlen, total_data)
     nodes.append(node)
-    #print ("ENVVVV",env.now)
     env.process(transmit(env,node))
     
 env.run(until=600)
