@@ -33,7 +33,7 @@ import re
 
 ####WE START BY USING SF=12 ADN BW=125 AND CR=1, FOR ALL NODES AND ALL TRANSMISIONS######
 ####WE ALSO CONSIDER SIMPLE CHECK, WHERE TWO PACKETS COLLIDE WHEN THEY ARRIVE AT: SAME TIME, SAME FREQUENCY AND SAME SF####
-nrNodes = 5 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
+nrNodes = 15 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
 #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
 RANDOM_SEED = 6
 random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUMBERS (ie SAME RESULTS OF SIMULATION)
@@ -41,10 +41,12 @@ random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUM
 ###PLOTS ##
 plots_nodes = 0 ## FOR PLOT SIMULATION
 plots_bar = 0 ##FOR PLOT BARS RESULTS OF SIMULATION
+
 full_collision = False
 
 ###GLOBAL PARAMS ####
 bsId = 1 ##ID OF BASE STATION (NOT USED)
+channel = [0,1,2]
 avgSendTime = 3  ## NOT USED! --> A NODE SENDS A PACKET EVERY X SECS
 packetlen = 20   ##NODES SEND PACKETS OF JUST 20 Bytes
 total_data = 60 ##TOTAL DATA ON BUFFER, FOR EACH NODE (IT'S THE BUFFER O DATA BEFORE START SENDING)
@@ -156,15 +158,17 @@ def checkcollision(packet):
         packet.processed = 1
 
     if packetsAtBS:
-        print ("{} || >> FOUND overlap... node {} (sf:{} bw:{} freq:{:.6e}) others: {}".format(env.now,packet.nodeid, packet.sf, packet.bw, packet.freq,len(packetsAtBS)))
+        print ("{} || >> FOUND overlap... node {} (sf:{} bw:{} ch:{}) others: {}".format(env.now,packet.nodeid, packet.sf, packet.bw,packet.ch,len(packetsAtBS)))
         for other in packetsAtBS:
             if other.nodeid != packet.nodeid:
-               print ("{} || >> node {} overlap with node {} (sf:{} bw:{} freq:{:.6e})".format(env.now,packet.nodeid, other.nodeid, other.packet.sf, other.packet.bw, other.packet.freq))
+               print ("{} || >> node {} overlapped with node {} (sf:{} bw:{} ch:{}). Let's check CH..".format(env.now,packet.nodeid, other.nodeid, other.packet.sf, other.packet.bw,other.packet.ch))
                # simple collision
-               if frequencyCollision(packet, other.packet) and sfCollision(packet, other.packet):
+               #if frequencyCollision(packet, other.packet) and sfCollision(packet, other.packet):
+               if channelCollision(packet, other.packet) and sfCollision(packet, other.packet):
                     packet.collided = 1
                     other.packet.collided = 1  # other also got lost, if it wasn't lost already
                     col = 1
+                                   
 # =============================================================================
 #                    if full_collision:
 #                        if timingCollision(packet, other.packet):
@@ -205,20 +209,29 @@ def frequencyCollision(p1,p2):
             print( "{} || >> freq coll for BW 125 on node {} and node {}.. Let's check SF...".format(env.now,p1.nodeid, p2.nodeid))
             return True
         #else:
-    print ("{} || >> no frequency Collision!".format(env.now))
+    print ("{} || >> No frequency collision..".format(env.now))
     return False
+
+def channelCollision(p1,p2):
+    if (p1.ch == p2.ch):
+        print ("{} || >> channel coll for ch {} on node {} and ch {} on node {}.. Let's check SF...".format(env.now,p1.ch,p1.nodeid,p2.ch,p2.nodeid))
+        return True
+    else:
+        print ("{} || >> No channel collision..".format(env.now))
+        return False
 
 def sfCollision(p1, p2):
     if p1.sf == p2.sf:
         print ("{} || >> COLLISION! same SF on node {} and node {}".format(env.now,p1.nodeid, p2.nodeid))
         # p2 may have been lost too, will be marked by other checks
         return True
-    print ("NO SF collision at all.. NO COLLISION")
+    print ("{} || >> No SF Collision!".format(env.now))
     return False
 
 
 class myNode():
     def __init__(self, nodeid, bs, avgSendTime, packetlen, total_data):
+        global channel
         self.nodeid = nodeid
         self.avgSendTime = avgSendTime
         self.bs = bs
@@ -228,7 +241,8 @@ class myNode():
         #print('node %d' %nodeid, "dist: ", self.dist[0])
         self.buffer = total_data
         self.packetlen = packetlen
-        self.packet = myPacket(self.nodeid, packetlen, self.dist)
+        self.ch = int(random.choice(channel)) 
+        self.packet = myPacket(self.nodeid, packetlen, self.dist, self.ch)
         self.sent = 0 #INITIAL SENT PACKETS
         self.totalLost = 0 #INITIAL TOTAL LOST FOR PARTICULAR NODE
         self.totalColl = 0
@@ -237,7 +251,7 @@ class myNode():
         
 
 class myPacket():
-    def __init__(self, nodeid, packetlen, dist):
+    def __init__(self, nodeid, packetlen, dist, ch):
         #global experiment
         global Ptx
         global Prx
@@ -267,6 +281,7 @@ class myPacket():
         self.arriveTime = 0
         self.rssi = Prx[nodeid,:]
         self.freq = freq
+        self.ch = ch
         # frequencies: lower bound + number of 61 Hz steps
         #self.freq = 860000000 + random.randint(0,2622950)
 
@@ -342,7 +357,7 @@ def transmit(env,node):
                         node.packet.lost = False ## LOST ONLY CONSIDERING Lpl
                         print ("{} || Prx for node {} is {} dB".format(env.now, node.nodeid, node.packet.rssi[math.ceil(env.now)]))
                         #print ("Prx for node",node.nodeid, "is: ",node.packet.rssi[math.ceil(env.now)],"at time",env.now)
-                        print ("{} || Lets try if there are collisions...".format(env.now))
+                        print ("{} || Let's try if there are collisions...".format(env.now))
                         if (checkcollision(node.packet)==1):
                             node.packet.collided = 1
                         else:
