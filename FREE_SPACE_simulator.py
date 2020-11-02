@@ -33,7 +33,7 @@ import re
 
 ####WE START BY USING SF=12 ADN BW=125 AND CR=1, FOR ALL NODES AND ALL TRANSMISIONS######
 ####WE ALSO CONSIDER SIMPLE CHECK, WHERE TWO PACKETS COLLIDE WHEN THEY ARRIVE AT: SAME TIME, SAME FREQUENCY AND SAME SF####
-nrNodes = 15 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
+nrNodes = 100 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
 #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
 RANDOM_SEED = 6
 random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUMBERS (ie SAME RESULTS OF SIMULATION)
@@ -241,8 +241,8 @@ class myNode():
         #print('node %d' %nodeid, "dist: ", self.dist[0])
         self.buffer = total_data
         self.packetlen = packetlen
-        self.ch = int(random.choice(channel)) 
-        self.packet = myPacket(self.nodeid, packetlen, self.dist, self.ch)
+        #self.ch = int(random.choice(channel)) 
+        self.packet = myPacket(self.nodeid, packetlen, self.dist)
         self.sent = 0 #INITIAL SENT PACKETS
         self.totalLost = 0 #INITIAL TOTAL LOST FOR PARTICULAR NODE
         self.totalColl = 0
@@ -251,7 +251,7 @@ class myNode():
         
 
 class myPacket():
-    def __init__(self, nodeid, packetlen, dist, ch):
+    def __init__(self, nodeid, packetlen, dist):
         #global experiment
         global Ptx
         global Prx
@@ -263,6 +263,7 @@ class myPacket():
         #global GL
         global c
         global distance
+        global channel
 
         self.nodeid = nodeid
         self.txpow = Ptx
@@ -281,7 +282,7 @@ class myPacket():
         self.arriveTime = 0
         self.rssi = Prx[nodeid,:]
         self.freq = freq
-        self.ch = ch
+        self.ch = int(random.choice(channel))
         # frequencies: lower bound + number of 61 Hz steps
         #self.freq = 860000000 + random.randint(0,2622950)
 
