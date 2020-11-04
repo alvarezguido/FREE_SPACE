@@ -33,7 +33,7 @@ import re
 
 ####WE START BY USING SF=12 ADN BW=125 AND CR=1, FOR ALL NODES AND ALL TRANSMISIONS######
 ####WE ALSO CONSIDER SIMPLE CHECK, WHERE TWO PACKETS COLLIDE WHEN THEY ARRIVE AT: SAME TIME, SAME FREQUENCY AND SAME SF####
-nrNodes = 100 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
+nrNodes = 10 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
 #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
 RANDOM_SEED = 6
 random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUMBERS (ie SAME RESULTS OF SIMULATION)
@@ -46,7 +46,8 @@ full_collision = False
 
 ###GLOBAL PARAMS ####
 bsId = 1 ##ID OF BASE STATION (NOT USED)
-channel = [0,1,2]
+channel = [0,1,2] ##NOT USED BY NOW
+
 avgSendTime = 3  ## NOT USED! --> A NODE SENDS A PACKET EVERY X SECS
 packetlen = 20   ##NODES SEND PACKETS OF JUST 20 Bytes
 total_data = 60 ##TOTAL DATA ON BUFFER, FOR EACH NODE (IT'S THE BUFFER O DATA BEFORE START SENDING)
@@ -60,8 +61,8 @@ G_device = 0; ##ANTENNA GAIN FOR AN END-DEVICE
 G_sat = 12;   ##ANTENNA GAIN FOR SATELLITE
 nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
 freq =868e6 ##USED FOR PATH LOSS CALCULATION
-
-
+frequency = [868100000, 868300000, 868500000] ##FROM LORAWAN REGIONAL PARAMETERS EU863-870 / EU868
+#frequency = [868100000,868100000,868100000]
 maxBSReceives = 8 ##MAX NUMBER OF PACKETS THAT BS (ie SATELLITE) CAN RECEIVE AT SAME TIME
 nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
 nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
@@ -152,42 +153,35 @@ def checkcollision(packet):
         if packetsAtBS[i].packet.processed == 1:
             processing = processing + 1
     if (processing > maxBSReceives):
-        print ("TOO MUCH PACKETS OF BASE STATION... PACKET WILL BE LOST:", len(packetsAtBS))
+        print ("{:3.5f} || Too much packets on Base Sattion.. Packet will be lost!", len(packetsAtBS))
         packet.processed = 0
     else:
         packet.processed = 1
 
     if packetsAtBS:
-        print ("{} || >> FOUND overlap... node {} (sf:{} bw:{} ch:{}) others: {}".format(env.now,packet.nodeid, packet.sf, packet.bw,packet.ch,len(packetsAtBS)))
+        print ("{:3.5f} || >> FOUND overlap... node {} (sf:{} bw:{} freq:{}) others: {}".format(env.now,packet.nodeid, packet.sf, packet.bw,packet.freq,len(packetsAtBS)))
         for other in packetsAtBS:
             if other.nodeid != packet.nodeid:
-               print ("{} || >> node {} overlapped with node {} (sf:{} bw:{} ch:{}). Let's check CH..".format(env.now,packet.nodeid, other.nodeid, other.packet.sf, other.packet.bw,other.packet.ch))
+               print ("{:3.5f} || >> node {} overlapped with node {} (sf:{} bw:{} freq:{}). Let's check Freq...".format(env.now,packet.nodeid, other.nodeid, other.packet.sf, other.packet.bw,other.packet.freq))
                # simple collision
                #if frequencyCollision(packet, other.packet) and sfCollision(packet, other.packet):
-               if channelCollision(packet, other.packet) and sfCollision(packet, other.packet):
+               if frequencyCollision(packet, other.packet) and sfCollision(packet, other.packet):
+# =============================================================================
+#                     if timingCollision(packet, other.packet):
+#                        # check who collides in the power domain
+#                        c = powerCollision(packet, other.packet)
+#                        # mark all the collided packets
+#                        # either this one, the other one, or both
+#                        for p in c:
+#                            p.collided = 1
+#                            if p == packet:
+#                                col = 1
+# =============================================================================
+                
                     packet.collided = 1
                     other.packet.collided = 1  # other also got lost, if it wasn't lost already
                     col = 1
                                    
-# =============================================================================
-#                    if full_collision:
-#                        if timingCollision(packet, other.packet):
-#                            # check who collides in the power domain
-#                            c = powerCollision(packet, other.packet)
-#                            # mark all the collided packets
-#                            # either this one, the other one, or both
-#                            for p in c:
-#                                p.collided = 1
-#                                if p == packet:
-#                                    col = 1
-#                        else:
-#                            # no timing collision, all fine
-#                            pass
-#                    else:
-#                        packet.collided = 1
-#                        other.packet.collided = 1  # other also got lost, if it wasn't lost already
-#                        col = 1
-# =============================================================================
         return col
     return 0
 
@@ -199,35 +193,74 @@ def checkcollision(packet):
 ##|f1-f2| <= 30 kHz if f1 or f2 has bw 125
 def frequencyCollision(p1,p2):
     if (abs(p1.freq-p2.freq)<=120 and (p1.bw==500 or p2.freq==500)):
-        print ("{} || >> freq coll for BW 500 on node {} and node {}.. Let's check SF...".format(env.now,p1.nodeid, p2.nodeid))
+        print ("{:3.5f} || >> freq coll on node {} and node {}.. Let's check SF...".format(env.now,p1.nodeid, p2.nodeid))
         return True
     elif (abs(p1.freq-p2.freq)<=60 and (p1.bw==250 or p2.freq==250)):
-        print ("{} || >> freq coll for BW 250 on node {} and node {}.. Let's check SF...".format(env.now,p1.nodeid, p2.nodeid))
+        print ("{:3.5f} || >> freq coll on node {} and node {}.. Let's check SF...".format(env.now,p1.nodeid, p2.nodeid))
         return True
     else:
         if (abs(p1.freq-p2.freq)<=30):
-            print( "{} || >> freq coll for BW 125 on node {} and node {}.. Let's check SF...".format(env.now,p1.nodeid, p2.nodeid))
+            print( "{:3.5f} || >> Freq coll on node {} and node {}.. Let's check SF...".format(env.now,p1.nodeid, p2.nodeid))
             return True
         #else:
-    print ("{} || >> No frequency collision..".format(env.now))
+    print ("{:3.5f} || >> No frequency collision..".format(env.now))
     return False
 
+#FOLLOWING FUNCTION NOT USED
 def channelCollision(p1,p2):
     if (p1.ch == p2.ch):
-        print ("{} || >> channel coll for ch {} on node {} and ch {} on node {}.. Let's check SF...".format(env.now,p1.ch,p1.nodeid,p2.ch,p2.nodeid))
+        print ("{:3.5f} || >> channel coll for ch {} on node {} and ch {} on node {}.. Let's check SF...".format(env.now,p1.ch,p1.nodeid,p2.ch,p2.nodeid))
         return True
     else:
-        print ("{} || >> No channel collision..".format(env.now))
+        print ("{:3.5f} || >> No channel collision..".format(env.now))
         return False
 
 def sfCollision(p1, p2):
     if p1.sf == p2.sf:
-        print ("{} || >> COLLISION! same SF on node {} and node {}".format(env.now,p1.nodeid, p2.nodeid))
+        print ("{:3.5f} || >> COLLISION! SF coll on node {} and node {} (ie same SF)...".format(env.now,p1.nodeid, p2.nodeid))
         # p2 may have been lost too, will be marked by other checks
         return True
-    print ("{} || >> No SF Collision!".format(env.now))
+    print ("{:3.5f} || >> No SF Collision!".format(env.now))
     return False
 
+def timingCollision(p1, p2):
+    # assuming p1 is the freshly arrived packet and this is the last check
+    # we've already determined that p1 is a weak packet, so the only
+    # way we can win is by being late enough (only the first n - 5 preamble symbols overlap)
+
+    # assuming 8 preamble symbols
+    Npream = 8
+
+    # we can lose at most (Npream - 5) * Tsym of our preamble
+    Tpreamb = 2**p1.sf/(1.0*p1.bw) * (Npream - 5)
+
+    # check whether p2 ends in p1's critical section
+    p2_end = p2.addTime + p2.rectime
+    p1_cs = env.now + (Tpreamb/1000.0)  # to sec
+    ##print ("{} || >> collision timing node {} ({},{},{}) node {} ({},{})".format(env.now,p1.nodeid, env.now - env.now, p1_cs - env.now, p1.rectime,p2.nodeid, p2.addTime - env.now, p2_end - env.now))
+    if p1_cs < p2_end:
+        # p1 collided with p2 and lost
+        print ("{:3.5f} || not late enough.. Timing collision...".format(env.now))
+        return True
+    print ("{:3.5f} || Saved by the preamble.. No timing collision!".format(env.now))
+    return False
+
+def powerCollision(p1, p2):
+    powerThreshold = 6 # dB
+    print ("{:3.5f} || power: node {} {:3.2f} dBm, node {} {:3.2f}; diff is {}dBm".format(env.now,p1.nodeid,p1.rssi[math.ceil(env.now)],p2.nodeid, p2.rssi[math.ceil(env.now)], round(p1.rssi[math.ceil(env.now)] - p2.rssi[math.ceil(env.now)],2)))
+    #print ("pwr: node {0.nodeid} {0.rssi:3.2f} dBm node {1.nodeid} {1.rssi:3.2f} dBm; diff {2:3.2f} dBm".format(p1, p2, round(p1.rssi[math.ceil(env.now)] - p2.rssi[math.ceil(env.now)],2)))
+    if abs(p1.rssi[math.ceil(env.now)] - p2.rssi[math.ceil(env.now)]) < powerThreshold:
+        print( "{:3.5f} || Collision power both node {} and node {}".format(env.now,p1.nodeid, p2.nodeid))
+        # packets are too close to each other, both collide
+        # return both packets as casualties
+        return (p1, p2)
+    elif p1.rssi[math.ceil(env.now)] - p2.rssi[math.ceil(env.now)] < powerThreshold:
+        # p2 overpowered p1, return p1 as casualty
+        print ("{:3.5f} || Collision pwr node {} has overpowered node {}".format(env.now,p2.nodeid, p1.nodeid))
+        return (p1,)
+    print ("{:3.5f} || p1 wins, p2 lost".format(env.now))
+    # p2 was the weaker packet, return it as a casualty
+    return (p2,)
 
 class myNode():
     def __init__(self, nodeid, bs, avgSendTime, packetlen, total_data):
@@ -259,11 +292,12 @@ class myPacket():
         #global d0
         #global var
         global Lpl
-        global freq
+        #global freq
         #global GL
         global c
         global distance
         global channel
+        global frequency
 
         self.nodeid = nodeid
         self.txpow = Ptx
@@ -281,8 +315,9 @@ class myPacket():
         self.symTime = (2.0**self.sf)/self.bw
         self.arriveTime = 0
         self.rssi = Prx[nodeid,:]
-        self.freq = freq
-        self.ch = int(random.choice(channel))
+        self.freq = int(random.choice(frequency)) 
+        
+        #self.ch = int(random.choice(channel))
         # frequencies: lower bound + number of 61 Hz steps
         #self.freq = 860000000 + random.randint(0,2622950)
 
@@ -331,11 +366,11 @@ def transmit(env,node):
         yield env.timeout(node.packet.rectime + float(node.packet.proptime[math.ceil(env.now)])) ##GIVE TIME TO RECEIVE BEACON
                       
         if node in packetsAtBS:
-            print ("ERROR: packet is already in...")
+            print ("{:3.5f} || ERROR: packet is already in...".format(env.now))
         else:
             sensibility = sensi[node.packet.sf - 7, [125,250,500].index(node.packet.bw) + 1]
             if node.packet.rssi[math.ceil(env.now)] < sensibility: #HERE WE ARE CONSIDERING RSSI AT TIME ENV.NOW
-                print ("{} || Node {}: Can not reach beacon due Lpl".format(env.now,node.nodeid))
+                print ("{:3.5f} || Node {}: Can not reach beacon due Lpl".format(env.now,node.nodeid))
                 wait =0 ##LETS WAIT FOR NEXT BEACON
                 node.packet.lost = False
                 trySend = False
@@ -343,28 +378,29 @@ def transmit(env,node):
             else:
                 wait = random.uniform(0,back_off - node.packet.rectime - float(node.packet.proptime[math.ceil(env.now)])) ##TRIGGER BACK-OFF TIME
                 yield env.timeout(wait)
-                print ("{} || Node {} begins to transmit a packet".format(env.now,node.nodeid))
+                print ("{:3.5f} || Node {} begins to transmit a packet".format(env.now,node.nodeid))
                 trySend = True
                 node.sent = node.sent + 1
                 node.buffer = node.buffer - node.packetlen
                 if node in packetsAtBS:
-                    print ("ERROR: packet is already in...")
+                    print ("{} || ERROR: packet is already in...".format(env.now))
                 else:
                     sensibility = sensi[node.packet.sf - 7, [125,250,500].index(node.packet.bw) + 1]
                     if node.packet.rssi[math.ceil(env.now)] < sensibility: #HERE WE ARE CONSIDERING RSSI AT TIME ENV.NOW
-                        print ("{} || Node {}: The Packet will be Lost due Lpl".format(env.now,node.nodeid))
+                        print ("{:3.5f} || Node {}: The Packet will be Lost due Lpl".format(env.now,node.nodeid))
                         node.packet.lost = True ## LOST ONLY CONSIDERING Lpl
                     else:
                         node.packet.lost = False ## LOST ONLY CONSIDERING Lpl
-                        print ("{} || Prx for node {} is {} dB".format(env.now, node.nodeid, node.packet.rssi[math.ceil(env.now)]))
+                        print ("{:3.5f} || Prx for node {} is {:3.2f} dB".format(env.now, node.nodeid, node.packet.rssi[math.ceil(env.now)]))
                         #print ("Prx for node",node.nodeid, "is: ",node.packet.rssi[math.ceil(env.now)],"at time",env.now)
-                        print ("{} || Let's try if there are collisions...".format(env.now))
+                        print ("{:3.5f} || Let's try if there are collisions...".format(env.now))
                         if (checkcollision(node.packet)==1):
                             node.packet.collided = 1
                         else:
                             node.packet.collided = 0
-                            print ("{} || ...No Collision by now!".format(env.now))
+                            print ("{:3.5f} || ...No Collision by now!".format(env.now))
                         packetsAtBS.append(node)
+                        node.packet.addTime = env.now
                         yield env.timeout(node.packet.rectime)
         
         if node.packet.lost:
@@ -408,7 +444,7 @@ def beacon (env):
         else:
             yield env.timeout(beacon_time)
         i=i+1
-        print ("{} || ***A new beacon has been sended from Satellite***".format(env.now))    
+        print ("{:3.5f} || ***A new beacon has been sended from Satellite***".format(env.now))    
     
 
 ###PLEASE UNCOMMENT FOR REGULAR FUNCIONALITY           
