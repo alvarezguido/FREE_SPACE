@@ -33,7 +33,7 @@ import re
 
 ####WE START BY USING SF=12 ADN BW=125 AND CR=1, FOR ALL NODES AND ALL TRANSMISIONS######
 ####WE ALSO CONSIDER SIMPLE CHECK, WHERE TWO PACKETS COLLIDE WHEN THEY ARRIVE AT: SAME TIME, SAME FREQUENCY AND SAME SF####
-nrNodes = 20 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
+nrNodes = 5 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
 #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
 RANDOM_SEED = 6
 random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUMBERS (ie SAME RESULTS OF SIMULATION)
@@ -61,8 +61,10 @@ G_device = 0; ##ANTENNA GAIN FOR AN END-DEVICE
 G_sat = 12;   ##ANTENNA GAIN FOR SATELLITE
 nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
 freq =868e6 ##USED FOR PATH LOSS CALCULATION
+### WE MAINTAIN SAME CHANNES FOR LORA-E
 frequency = [868100000, 868300000, 868500000] ##FROM LORAWAN REGIONAL PARAMETERS EU863-870 / EU868
 #frequency = [868100000,868100000,868100000]
+carriers = list(range(280))
 maxBSReceives = 8 ##MAX NUMBER OF PACKETS THAT BS (ie SATELLITE) CAN RECEIVE AT SAME TIME
 nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
 nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
@@ -144,6 +146,43 @@ Prx = Ptx + G_sat + G_device -20*np.log10(distance*1000) - 20*np.log10(freq) + 1
     ## Prx[i,j]:
         ## i --> the node i
         ## j --> the step time in sat pass 
+
+def checkcollision2 (header,replica):
+    col = 0 # flag needed since there might be several collisions for packet
+    processing = 0
+    #print ("MAX RECEIVE IS: ", maxBSReceives)
+    for i in range(0,len(packetsAtBS)):
+        if packetsAtBS[i].header.processed == 1:
+            processing = processing + 1
+    if (processing > maxBSReceives):
+        print ("{:3.5f} || Too much packets on Base Sattion.. Packet will be lost!", len(packetsAtBS))
+        header.processed = 0
+    else:
+        header.processed = 1
+        
+    if packetsAtBS:
+        print ("{:3.5f} || >> FOUND overlap... node {}, others {}".format(env.now,header.nodeid,len(packetsAtBS)))
+        for other in packetsAtBS:
+            if other.nodeid != header.nodeid:
+                print ("{:3.5f} || >> node {} overlapped with node {}... Let's check Freq...".format(env.now,header.nodeid,other.nodeid))
+                if frequencyCollision2(header, other.header,replica):
+                    header.collided = 1
+                    other.header.collided = 1  # other also got lost, if it wasn't lost already
+                    col = 1
+        return col
+    return 0
+
+def frequencyCollision2(p1,p2,replica):
+    if (p1.ch == p2.ch):
+        print ("{:3.5f} || >> same channel on node {} and node {}".format(env.now,p1.nodeid,p2.nodeid))
+        if (p1.freqHopHeader[replica] == p2.freqHopHeader[replica]):
+            print ("{:3.5f} || Header {} from node {} collided".format(env.now,replica,p1.nodeid))
+            return True
+    else:
+        print ("{:3.5f} || >> No channel collision..".format(env.now))
+        return False
+    
+
 
 def checkcollision(packet):
     col = 0 # flag needed since there might be several collisions for packet
@@ -265,6 +304,8 @@ def powerCollision(p1, p2):
 class myNode():
     def __init__(self, nodeid, bs, avgSendTime, packetlen, total_data):
         global channel
+        carriers = list(range(280))
+        random.shuffle(carriers) #TO CHOOSE THE HOPPING JUMPS
         self.nodeid = nodeid
         self.avgSendTime = avgSendTime
         self.bs = bs
@@ -276,12 +317,57 @@ class myNode():
         self.packetlen = packetlen
         #self.ch = int(random.choice(channel)) 
         self.packet = myPacket(self.nodeid, packetlen, self.dist)
+        self.freqHop = carriers[0:35]
+        self.header = myHeader(self.nodeid,self.dist,self.freqHop)
+        self.intraPacket = myIntraPacket(self.nodeid,self.packetlen,self.dist,self.freqHop)
         self.sent = 0 #INITIAL SENT PACKETS
         self.totalLost = 0 #INITIAL TOTAL LOST FOR PARTICULAR NODE
         self.totalColl = 0
         self.totalRec = 0
         self.totalProc = 0
         
+class myHeader ():
+    def __init__(self,nodeid,dist,freqHop):
+        global Ptx
+        global Prx
+        global Lpl
+        global c
+        global distance
+        global channel
+        global frequency
+        self.nodeid = nodeid
+        self.txpow = Ptx
+        self.transRange = 150
+        self.arriveTime = 0
+        self.rssi = Prx[nodeid,:]
+        self.freqHopHeader = freqHop[0:3]
+        self.rectime = 0.233
+        self.proptime = distance[nodeid,:]*(1/c)
+        self.collided = 0
+        self.processed = 0
+        self.ch = int(random.choice(channel))
+        self.lost = bool
+
+class myIntraPacket ():
+    def __init__(self,nodeid,packetlen,dist,freqHop):
+        global Ptx
+        global Prx
+        global Lpl
+        global c
+        global distance
+        global channel
+        global frequency
+        self.nodeid = nodeid
+        self.txpow = Ptx
+        self.transRange = 150
+        self.arriveTime = 0
+        self.rssi = Prx[nodeid,:]
+        self.freqHopIntraPacket = freqHop[3:]
+        self.rectime = 50e-3
+        self.proptime = distance[nodeid,:]*(1/c)
+        self.collided = 0
+        self.processed = 0
+        self.lost = bool
 
 class myPacket():
     def __init__(self, nodeid, packetlen, dist):
@@ -394,15 +480,19 @@ def transmit(env,node):
                         print ("{:3.5f} || Prx for node {} is {:3.2f} dB".format(env.now, node.nodeid, node.packet.rssi[math.ceil(env.now)]))
                         #print ("Prx for node",node.nodeid, "is: ",node.packet.rssi[math.ceil(env.now)],"at time",env.now)
                         print ("{:3.5f} || Let's try if there are collisions...".format(env.now))
-                        if (checkcollision(node.packet)==1):
-                            node.packet.collided = 1
-                        else:
-                            node.packet.collided = 0
-                            print ("{:3.5f} || ...No Collision by now!".format(env.now))
-                        packetsAtBS.append(node)
-                        node.packet.addTime = env.now
-                        yield env.timeout(node.packet.rectime)
-        
+                        for i in range(3):
+                            print ("{:3.5f} || Sending Header replica {}...".format(env.now,i))
+                            if (checkcollision2(node.header,i)==1):
+                                #node.packet.collided = 1
+                                print ("{:3.5f} || Collision for Header replica {} !!!".format(env.now,i))
+                            else:
+                                print ("{:3.5f} || ...No Collision for Header replica {}!".format(env.now,i))
+                                node.packet.collided = 0
+                                #print ("{:3.5f} || ...No Collision by now!".format(env.now))
+                            packetsAtBS.append(node)
+                            #node.packet.addTime = env.now
+                            yield env.timeout(node.header.rectime)
+                                   
         if node.packet.lost:
             global nrLost
             nrLost += 1
@@ -430,9 +520,9 @@ def transmit(env,node):
         
         #yield env.timeout(beacon_time-wait-node.packet.rectime)
         if trySend:
-            yield env.timeout(beacon_time-wait-2*node.packet.rectime)
+            yield env.timeout(beacon_time-wait-6*node.header.rectime)
         else:
-            yield env.timeout(beacon_time-wait-node.packet.rectime)
+            yield env.timeout(beacon_time-wait-3*node.header.rectime)
                       
                 
 def beacon (env):
@@ -450,7 +540,7 @@ def beacon (env):
 ###PLEASE UNCOMMENT FOR REGULAR FUNCIONALITY           
 env.process(beacon(env)) ##BEACON SENDER
 
-### THIS IS GOING TO CREATE NODES AND DO TRAMSMISIONS. IS THE MAIN PROGRAM ###
+### THIS IS GOING TO CREATE NODES AND DO TRAMSMISIONS.IT IS THE MAIN PROGRAM ###
 for i in range(nrNodes):
     node = myNode(i,bsId, avgSendTime, packetlen, total_data)
     nodes.append(node)
