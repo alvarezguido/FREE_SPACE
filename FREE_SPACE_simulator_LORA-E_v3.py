@@ -422,8 +422,10 @@ def transmit(env,node):
             if node.packet.rssi[math.ceil(env.now)] < sensibility: #HERE WE ARE CONSIDERING RSSI AT TIME ENV.NOW
                 print ("{:3.5f} || Node {}: Can not reach beacon due Lpl".format(env.now,node.nodeid))
                 wait =0 ##LETS WAIT FOR NEXT BEACON
-                node.packet.lost = False
+                node.header.lost = False
+                node.intraPacket.lost = False
                 trySend = False
+                nIntraPackets =0
 
             else:
                 wait = random.uniform(0,back_off - node.packet.rectime - float(node.packet.proptime[math.ceil(env.now)])) ##TRIGGER BACK-OFF TIME
@@ -438,9 +440,12 @@ def transmit(env,node):
                     sensibility = sensi[node.packet.sf - 7, [125,250,500].index(node.packet.bw) + 1]
                     if node.packet.rssi[math.ceil(env.now)] < sensibility: #HERE WE ARE CONSIDERING RSSI AT TIME ENV.NOW
                         print ("{:3.5f} || Node {}: The Packet will be Lost due Lpl".format(env.now,node.nodeid))
-                        node.packet.lost = True ## LOST ONLY CONSIDERING Lpl
+                        node.header.lost = True ## LOST ONLY CONSIDERING Lpl
+                        node.intraPacket.lost = True ## LOST ONLY CONSIDERING Lpl
+                        #nIntraPackets =0
                     else:
-                        node.packet.lost = False ## LOST ONLY CONSIDERING Lpl
+                        node.header.lost = False ## LOST ONLY CONSIDERING Lpl
+                        node.intraPacket.lost = False ## LOST ONLY CONSIDERING Lpl
                         #print ("{:3.5f} || Prx for node {} is {:3.2f} dB".format(env.now, node.nodeid, node.packet.rssi[math.ceil(env.now)]))
                         #print ("Prx for node",node.nodeid, "is: ",node.packet.rssi[math.ceil(env.now)],"at time",env.now)
                        
@@ -511,26 +516,70 @@ def transmit(env,node):
 #             global nrLostMaxRec
 #             nrLostMaxRec = nrLostMaxRec + 1
 # =============================================================================
-        global nrSentIntra
-        nrSentIntra = nrSentIntra + node.header.sentIntra + node.intraPacket.sentIntra
-       
-        if node.packet.lost: ##LOST DUE LPL
-            global nrLost
-            nrLost += 1
-            node.totalLost += 1 #ONLY DUE Lpl
+        if trySend == 1:
+            
+            global nrLost 
+            if node.header.lost ==1 or node.intraPacket.lost == 1:
+                nrLost +=1
+                
+            global nrSentIntra
+            nrSentIntra = nrSentIntra + node.header.sentIntra + node.intraPacket.sentIntra
+                ####ALL PACKET IS LOST...
+           
+            global nrCollisions
+            nrCollisions = nrCollisions + node.header.collided + node.intraPacket.collided
+            
+            global nrCollFullPacket
+            if node.header.collided == 3:
+                nrCollFullPacket +=1
+            elif node.intraPacket.collided > (1/3)*0*nIntraPackets:
+                nrCollFullPacket +=1
+           
+            ##RECEIVED FULL PACKETS
+            global nrReceived
+            if node.header.noProcessed <3 and node.header.collided <3 and node.intraPacket.noProcessed < (1/3)*nIntraPackets and node.intraPacket.collided < (1/3)*nIntraPackets:
+                nrReceived +=1
+            
+            ##NO PROCESSED PACKETS (too much intra-packets on BS)
+            global nrNoProcessed
+            nrNoProcessed = nrNoProcessed + node.header.noProcessed + node.intraPacket.noProcessed
+        
+        ##RESET
+        node.header.collided = 0
+        node.header.processed = 0
+        node.header.noProcessed = 0
+        node.header.lost = False
+        node.intraPacket.nrColl = 0
+        node.intraPacket.collided = 0
+        node.intraPacket.processed = 0
+        node.intraPacket.noProcessed = 0
+        node.intraPacket.lost = False
+        node.header.sentIntra = 0
+        node.intraPacket.sentIntra = 0
+        if trySend:
+            #print ("BEACON TIMEEE",beacon_time)
+            #print ("WAITTT",wait)
+            #print ("NODE HEADER TIME",node.header.rectime)
+            #print ("ONE INTRA-PACKET TIMEE",node.intraPacket.rectime)
+            #yield env.timeout(beacon_time-wait)
+            yield env.timeout(beacon_time-wait-2*3*node.header.rectime-2*nIntraPackets*node.intraPacket.rectime)
+        else:
+            yield env.timeout(beacon_time-wait-3*node.header.rectime-nIntraPackets*node.intraPacket.rectime)
+            #yield env.timeout(beacon_time-wait)
+# =============================================================================
+#         if node.packet.lost: ##LOST DUE LPL
+#             global nrLost
+#             nrLost += 1
+#             node.totalLost += 1 #ONLY DUE Lpl
+# =============================================================================
         #print ("INTRA PACKETSS COLLL",node.intraPacket.nrColl)
         #print ("N INTRA PACKETSSS",(1/3)*nIntraPackets)
-            ####ALL PACKET IS LOST...
-        global nrCollisions
-        nrCollisions = nrCollisions + node.header.collided + node.intraPacket.collided
+        
         #node.totalColl += 1
         
         ###CHECKS FULL PACKET COLLISION
-        global nrCollFullPacket
-        if node.header.collided == 3:
-            nrCollFullPacket +=1
-        elif node.intraPacket.collided > (1/3)*nIntraPackets:
-            nrCollFullPacket +=1
+        #if trySend: 
+        
         
 # =============================================================================
 #         if node.header.collided ==3 or node.intraPacket.collided > (1/3)*nIntraPackets:
@@ -551,10 +600,8 @@ def transmit(env,node):
 #             node.totalProc += 1
 # =============================================================================
         
-        ##RECEIVED FULL PACKETS
-        global nrReceived
-        if node.header.noProcessed <3 and node.header.collided <3 and node.intraPacket.noProcessed < (1/3)*nIntraPackets and node.intraPacket.collided < (1/3)*nIntraPackets:
-            nrReceived +=1
+       
+       
         
 # =============================================================================
 #         if node.header.noProcessed <3 or node.header.collided !=3:
@@ -565,9 +612,7 @@ def transmit(env,node):
             
         
         
-        ##NO PROCESSED PACKETS (too much intra-packets on BS)
-        global nrNoProcessed
-        nrNoProcessed = nrNoProcessed + node.header.noProcessed + node.intraPacket.noProcessed
+     
         # complete packet has been received by base station
         # Let's remove from Base Station
 # =============================================================================
@@ -575,29 +620,10 @@ def transmit(env,node):
 #             packetsAtBS.remove(node)
 # =============================================================================
             # reset the packet
-        node.header.collided = 0
-        node.header.processed = 0
-        node.header.noProcessed = 0
-        node.header.lost = False
-        node.intraPacket.nrColl = 0
-        node.intraPacket.collided = 0
-        node.intraPacket.processed = 0
-        node.intraPacket.noProcessed = 0
-        node.intraPacket.lost = False
-        node.header.sentIntra = 0
-        node.intraPacket.sentIntra = 0
+       
         
         #yield env.timeout(beacon_time-wait-node.packet.rectime)
-        if trySend:
-            #print ("BEACON TIMEEE",beacon_time)
-            #print ("WAITTT",wait)
-            #print ("NODE HEADER TIME",node.header.rectime)
-            #print ("ONE INTRA-PACKET TIMEE",node.intraPacket.rectime)
-            #yield env.timeout(beacon_time-wait)
-            yield env.timeout(beacon_time-wait-2*3*node.header.rectime-2*nIntraPackets*node.intraPacket.rectime)
-        else:
-            yield env.timeout(beacon_time-wait-3*node.header.rectime-nIntraPackets*node.intraPacket.rectime)
-            #yield env.timeout(beacon_time-wait)
+        
                       
                 
 def beacon (env):
