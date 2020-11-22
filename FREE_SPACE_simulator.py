@@ -33,7 +33,7 @@ import re
 
 ####WE START BY USING SF=12 ADN BW=125 AND CR=1, FOR ALL NODES AND ALL TRANSMISIONS######
 ####WE ALSO CONSIDER SIMPLE CHECK, WHERE TWO PACKETS COLLIDE WHEN THEY ARRIVE AT: SAME TIME, SAME FREQUENCY AND SAME SF####
-nrNodes = 20 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
+nrNodes = 100 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
 #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
 RANDOM_SEED = 6
 random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUMBERS (ie SAME RESULTS OF SIMULATION)
@@ -63,7 +63,7 @@ nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
 freq =868e6 ##USED FOR PATH LOSS CALCULATION
 frequency = [868100000, 868300000, 868500000] ##FROM LORAWAN REGIONAL PARAMETERS EU863-870 / EU868
 #frequency = [868100000,868100000,868100000]
-maxBSReceives = 8 ##MAX NUMBER OF PACKETS THAT BS (ie SATELLITE) CAN RECEIVE AT SAME TIME
+maxBSReceives = 1 ##MAX NUMBER OF PACKETS THAT BS (ie SATELLITE) CAN RECEIVE AT SAME TIME
 nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
 nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
 nrProcessed = 0 ##TOTAL OF PROCESSED PACKETS
@@ -411,7 +411,9 @@ def transmit(env,node):
             global nrCollisions
             nrCollisions = nrCollisions +1
             node.totalColl += 1
-        if node.packet.collided == 0 and not node.packet.lost and trySend:
+        
+        
+        if node.packet.collided == 0 and node.packet.processed == 1 and not node.packet.lost and trySend:
             global nrReceived
             nrReceived = nrReceived + 1
             node.totalRec += 1

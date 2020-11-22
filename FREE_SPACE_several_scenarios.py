@@ -411,7 +411,7 @@ def simulate_scenario (nrNodes):
                 global nrCollisions
                 nrCollisions = nrCollisions +1
                 node.totalColl += 1
-            if node.packet.collided == 0 and not node.packet.lost and trySend:
+            if node.packet.collided == 0 and not node.packet.lost  and node.packet.processed == 1 and trySend:
                 global nrReceived
                 nrReceived = nrReceived + 1
                 node.totalRec += 1
@@ -548,7 +548,7 @@ if plot_curves == 1:
     plt.xlim(0,800)
     plt.show()
     plt.legend()
-    plt.savefig("results_simulation.png")
+    plt.savefig("results_simulation_LoRa-L.png")
     
     
 

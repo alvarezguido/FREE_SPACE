@@ -33,7 +33,7 @@ import re
 
 ####WE START BY USING SF=12 ADN BW=125 AND CR=1, FOR ALL NODES AND ALL TRANSMISIONS######
 ####WE ALSO CONSIDER SIMPLE CHECK, WHERE TWO PACKETS COLLIDE WHEN THEY ARRIVE AT: SAME TIME, SAME FREQUENCY AND SAME SF####
-nrNodes = 150 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
+nrNodes = 500 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
 #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
 RANDOM_SEED = 6
 random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUMBERS (ie SAME RESULTS OF SIMULATION)
@@ -47,7 +47,7 @@ full_collision = False
 ###GLOBAL PARAMS ####
 bsId = 1 ##ID OF BASE STATION (NOT USED)
 channel = [0,1,2] ##NOT USED BY NOW
-
+#channel = [0]
 avgSendTime = 3  ## NOT USED! --> A NODE SENDS A PACKET EVERY X SECS
 packetlen = 20   ##NODES SEND PACKETS OF JUST 20 Bytes
 total_data = 60 ##TOTAL DATA ON BUFFER, FOR EACH NODE (IT'S THE BUFFER O DATA BEFORE START SENDING)
@@ -64,7 +64,7 @@ freq =868e6 ##USED FOR PATH LOSS CALCULATION
 frequency = [868100000, 868300000, 868500000] ##FROM LORAWAN REGIONAL PARAMETERS EU863-870 / EU868
 #frequency = [868100000,868100000,868100000]
 
-maxBSReceives = 1 ##MAX NUMBER OF PACKETS THAT BS (ie SATELLITE) CAN RECEIVE AT SAME TIME
+maxBSReceives = 8 ##MAX NUMBER OF PACKETS THAT BS (ie SATELLITE) CAN RECEIVE AT SAME TIME
 
 nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
 nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
@@ -74,6 +74,7 @@ nrNoProcessed = 0 ##TOTAL OF INTRA-PACKETS NO PROCESSED
 nrIntraTot = 0
 nrLostMaxRec = 0
 nrCollFullPacket = 0
+nrSentIntra = 0 ##TOTAL OF SENT INTRA-PACKTES
 env = simpy.Environment()
 
 
@@ -164,23 +165,24 @@ def checkcollision2(header,replica):
             processing = processing + 1
     #print ("PROCESSINGGGG NUMBER", processing)
     if (processing >= maxBSReceives):
-        print ("{:3.5f} || Too much packets ({}) on BS.. node {} header replica {} is lost!".format(env.now, len(packetsAtBS),header.nodeid,replica))
+        #print ("{:3.5f} || Too much packets ({}) on BS.. node {} header replica {} is lost!".format(env.now, len(packetsAtBS),header.nodeid,replica))
         header.noProcessed +=1
     else:
         header.processed = 1
   
     if packetsAtBS:
-        print ("{:3.5f} || >> FOUND header overlap... node {}, others {}".format(env.now,header.nodeid,len(packetsAtBS)))
+        #print ("{:3.5f} || >> FOUND header overlap... node {}, others {}".format(env.now,header.nodeid,len(packetsAtBS)))
         for other in packetsAtBS:
             if other.nodeid != header.nodeid:
-               print ("{:3.5f} || >> node {} header replica n° {} overlapped with node {}... Let's check channel...".format(env.now,header.nodeid,replica,other.nodeid))
+               #print ("{:3.5f} || >> node {} header replica n° {} overlapped with node {}... Let's check channel...".format(env.now,header.nodeid,replica,other.nodeid))
                # simple collision
                #if frequencyCollision(packet, other.packet) and sfCollision(packet, other.packet):
                #print ("REPLICAAAA:",replica)
                if frequencyCollision2(header, other.header,replica):               
-                    header.collided = 1
-                    other.header.collided = 1  # other also got lost, if it wasn't lost already
-                    col = 1                                 
+                    header.collided += 1
+                    other.header.collided += 1  # other also got lost, if it wasn't lost already. OTHER IS HEADER OR INTRAPACKET, ITS THE SAME
+                    col = 1
+                                                    
         return col
     return 0
 
@@ -194,56 +196,59 @@ def checkcollision3(intraPacket,nrIntra):
         if packetsAtBS[i].intraPacket.processed == 1:
             processing = processing + 1
     if (processing >= maxBSReceives):
-        print ("{:3.5f} || Too much packets ({}) on BS.. node {} intra-packet {} is lost!".format(env.now, len(packetsAtBS),intraPacket.nodeid,nrIntra))
+        #print ("{:3.5f} || Too much packets ({}) on BS.. node {} intra-packet {} is lost!".format(env.now, len(packetsAtBS),intraPacket.nodeid,nrIntra))
         intraPacket.noProcessed +=1
     else:
         intraPacket.processed = 1
 
     if packetsAtBS:
-        print ("{:3.5f} || >> FOUND intra-packet overlap... node {}, others {}".format(env.now,intraPacket.nodeid,len(packetsAtBS)))
+        #print ("{:3.5f} || >> FOUND intra-packet overlap... node {}, others {}".format(env.now,intraPacket.nodeid,len(packetsAtBS)))
         for other in packetsAtBS:
             if other.nodeid != intraPacket.nodeid:
-               print ("{:3.5f} || >> node {} intra-packet n° {} overlapped with node {}... Let's check channel...".format(env.now,intraPacket.nodeid,nrIntra,other.nodeid))
+               #print ("{:3.5f} || >> node {} intra-packet n° {} overlapped with node {}... Let's check channel...".format(env.now,intraPacket.nodeid,nrIntra,other.nodeid))
                # simple collision
                #if frequencyCollision(packet, other.packet) and sfCollision(packet, other.packet):
                #print ("REPLICAAAA:",replica)
                if frequencyCollision3(intraPacket, other.intraPacket,nrIntra):
-                    intraPacket.collided = 1
+                    intraPacket.collided += 1
                     #print ("OTHER CLASSSS",other)
-                    other.intraPacket.collided = 1  # other also got lost, if it wasn't lost already
-                    col = 1                                 
+                    other.intraPacket.collided += 1  # other also got lost, if it wasn't lost already
+                    col = 1
+                                                    
         return col
     return 0
 
 ###FOR HEADER COLLISON
 def frequencyCollision2(p1,p2,replica):
     if (p1.ch == p2.ch):
-        print ("{:3.5f} || >> same channel for header on node {} and node {}.. Let's check sub-channels...".format(env.now,p1.nodeid,p2.nodeid))
+        #print ("{:3.5f} || >> same channel for header on node {} and node {}.. Let's check sub-channels...".format(env.now,p1.nodeid,p2.nodeid))
         #if (p1.freqHopHeader[replica] == p2.freqHopHeader[replica]):
         if (p1.subCh == p2.subCh):
-            print ("{:3.5f} || >> same sub-channel for header on node {} and node {}".format(env.now,p1.nodeid,p2.nodeid))
+            #print ("{:3.5f} || >> same sub-channel for header on node {} and node {}".format(env.now,p1.nodeid,p2.nodeid))
             print ("{:3.5f} || >> Header {} from node {} collided!!!".format(env.now,replica,p1.nodeid))
             return True
         else:
-            print ("{:3.5f} || >> No sub-channel collision".format(env.now))
+            #print ("{:3.5f} || >> No sub-channel collision".format(env.now))
+            pass
     else:
-        print ("{:3.5f} || >> No header channel collision..".format(env.now))
+        #print ("{:3.5f} || >> No header channel collision..".format(env.now))
         return False
 
 ##FOR INTRA-PACKET COLLISION (QUITE SIMILAR TO FREQUENCYCOLLISION2)
 def frequencyCollision3(p1,p2,replica):
     if (p1.ch == p2.ch):
-        print ("{:3.5f} || >> same channel for intra-packet on node {} and node {}.. Let's check sub-channels...".format(env.now,p1.nodeid,p2.nodeid))
+        #print ("{:3.5f} || >> same channel for intra-packet on node {} and node {}.. Let's check sub-channels...".format(env.now,p1.nodeid,p2.nodeid))
         #if (p1.freqHopHeader[replica] == p2.freqHopHeader[replica]):
         #print ("SUBCHANELLLLL",p1.subCh)
         if (p1.subCh == p2.subCh):
-            print ("{:3.5f} || >> same sub-channel for intra-packet on node {} and node {}".format(env.now,p1.nodeid,p2.nodeid))
+            #print ("{:3.5f} || >> same sub-channel for intra-packet on node {} and node {}".format(env.now,p1.nodeid,p2.nodeid))
             print ("{:3.5f} || >> Intra-packet {} from node {} collided!!!".format(env.now,replica,p1.nodeid))
             return True
         else:
-            print ("{:3.5f} || >> No sub-channel collision".format(env.now))
+            #print ("{:3.5f} || >> No sub-channel collision".format(env.now))
+            pass
     else:
-        print ("{:3.5f} || >> No intra-packet channel collision..".format(env.now))
+        #print ("{:3.5f} || >> No intra-packet channel collision..".format(env.now))
         return False
 
 
@@ -298,6 +303,7 @@ class myHeader ():
         self.ch = ch
         self.lost = bool
         self.subCh = 0
+        self.sentIntra = 0
 
 class myIntraPacket ():
     def __init__(self,nodeid,dist,ch,freqHop):
@@ -325,6 +331,7 @@ class myIntraPacket ():
         self.ch = ch
         self.lost = bool
         self.subCh = 0
+        self.sentIntra = 0
 
 class myPacket():
     def __init__(self, nodeid, packetlen, dist):
@@ -421,7 +428,7 @@ def transmit(env,node):
             else:
                 wait = random.uniform(0,back_off - node.packet.rectime - float(node.packet.proptime[math.ceil(env.now)])) ##TRIGGER BACK-OFF TIME
                 yield env.timeout(wait)
-                print ("{:3.5f} || Node {} begins to transmit a packet".format(env.now,node.nodeid))
+                #print ("{:3.5f} || Node {} begins to transmit a packet".format(env.now,node.nodeid))
                 trySend = True
                 node.sent = node.sent + 1
                 node.buffer = node.buffer - node.packetlen
@@ -442,11 +449,12 @@ def transmit(env,node):
                             ###print ("{:3.5f} || Let's try if there are collisions...".format(env.now))
                             node.header.subCh = node.header.freqHopHeader[i]
                             #print ("SUBCHANELLLL: ",node.header.subCh)
+                            node.header.sentIntra +=1;
                             if (checkcollision2(node.header,i)==1):
                                 #node.packet.collided = 1
                                 print ("---{:3.5f} || Collision for Header replica {} node {} !!!".format(env.now,i,node.nodeid))
                                 #node.packet.collided = 1
-                                node.header.collided +=1
+                                #node.header.collided +=1 #ALREADY COUNTED ON FUNCTION                                
                             else:
                                 ###print ("{:3.5f} || ...No Collision for Header replica {} node {}!".format(env.now,i,node.nodeid))
                                 #node.packet.collided = 0
@@ -457,6 +465,7 @@ def transmit(env,node):
                             yield env.timeout(node.header.rectime)
                             if (node in packetsAtBS):
                                 packetsAtBS.remove(node)
+                        ##CALCULATE N OF INTRAPACKETS BASED ON PACKETLEN
                         payloadTime = airtime(12,1,node.packetlen,125)
                         nIntraPackets = math.ceil(payloadTime / 50e-3)
                         #print ("NUMBER OF INTRA PACKETSSSS",nIntraPackets)
@@ -465,9 +474,11 @@ def transmit(env,node):
                             ###print ("{:3.5f} || Sending intra-packet {} of {} for node {}...".format(env.now,j,nIntraPackets-1,node.nodeid))
                             ###print ("{:3.5f} || Let's try if there are collisions...".format(env.now))
                             node.intraPacket.subCh = node.intraPacket.freqHopIntraPacket[j]
+                            node.intraPacket.sentIntra +=1
                             #print ("INTRA-PACKT SUB CHANNELLLL", node.intraPacket.subCh)
                             if (checkcollision3(node.intraPacket,j)==1):
                                 print ("---{:3.5f} || Collision for intra-packet {} for node {} !!!".format(env.now,j,node.nodeid))
+                                #node.intraPacket.collided+=1 #ALREADY COUNTED ON FUNCTION
                             else:
                                 ###print ("{:3.5f} || ...No Collision for intra-packet {} for node {}!".format(env.now,j,node.nodeid))
                                 pass
@@ -491,9 +502,18 @@ def transmit(env,node):
 # =============================================================================
         
         #print ("Intrapacket NOOO PROCESEDD",node.intraPacket.noProcessed)
-        if node.header.noProcessed == 3 or node.intraPacket.noProcessed > (1/3)*nIntraPackets:
-            global nrLostMaxRec
-            nrLostMaxRec = nrLostMaxRec + 1
+# =============================================================================
+#         global nrLostMaxRec
+#         nrLostMaxRec = nrLostMaxRec + node.header.noProcessed + node.intraPacket.noProcessed                       
+# =============================================================================
+# =============================================================================
+#         if node.header.noProcessed == 3 or node.intraPacket.noProcessed > (1/3)*nIntraPackets:
+#             global nrLostMaxRec
+#             nrLostMaxRec = nrLostMaxRec + 1
+# =============================================================================
+        global nrSentIntra
+        nrSentIntra = nrSentIntra + node.header.sentIntra + node.intraPacket.sentIntra
+       
         if node.packet.lost: ##LOST DUE LPL
             global nrLost
             nrLost += 1
@@ -505,20 +525,45 @@ def transmit(env,node):
         nrCollisions = nrCollisions + node.header.collided + node.intraPacket.collided
         #node.totalColl += 1
         
-        if node.header.collided ==3 or node.intraPacket.collided > (1/3)*nIntraPackets:
-            global nrCollFullPacket
+        ###CHECKS FULL PACKET COLLISION
+        global nrCollFullPacket
+        if node.header.collided == 3:
             nrCollFullPacket +=1
-        elif trySend:
-            global nrReceived
-            global nrIntraTot
-            nrIntraTot = nrIntraTot + 3 + 27
-            nrReceived = nrReceived + 1
-            node.totalRec += 1
+        elif node.intraPacket.collided > (1/3)*nIntraPackets:
+            nrCollFullPacket +=1
+        
+# =============================================================================
+#         if node.header.collided ==3 or node.intraPacket.collided > (1/3)*nIntraPackets:
+#             global nrCollFullPacket
+#             nrCollFullPacket +=1
+#         elif trySend:
+#             global nrReceived
+#             global nrIntraTot
+#             nrIntraTot = nrIntraTot + 3 + 27
+#             nrReceived = nrReceived + 1
+#             node.totalRec += 1
+# =============================================================================
         #if not node.header.noProcessed == 3 or not node.intraPacket.noProcessed > (1/3)*nIntraPackets:
-        if node.header.noProcessed < 3 or node.intraPacket.noProcessed < (1/3)*nIntraPackets:
-            global nrProcessed
-            nrProcessed = nrProcessed + 1
-            node.totalProc += 1
+# =============================================================================
+#         if node.header.noProcessed < 3 or node.intraPacket.noProcessed < (1/3)*nIntraPackets:
+#             global nrProcessed
+#             nrProcessed = nrProcessed + 1
+#             node.totalProc += 1
+# =============================================================================
+        
+        ##RECEIVED FULL PACKETS
+        global nrReceived
+        if node.header.noProcessed <3 and node.header.collided <3 and node.intraPacket.noProcessed < (1/3)*nIntraPackets and node.intraPacket.collided < (1/3)*nIntraPackets:
+            nrReceived +=1
+        
+# =============================================================================
+#         if node.header.noProcessed <3 or node.header.collided !=3:
+#             nrReceived +=1
+#         elif node.intraPacket.noProcessed < (1/3)*nIntraPackets or node.intraPacket.collided > (1/3)*nIntraPackets:
+#             nrReceived +=1
+# =============================================================================
+            
+        
         
         ##NO PROCESSED PACKETS (too much intra-packets on BS)
         global nrNoProcessed
@@ -539,6 +584,8 @@ def transmit(env,node):
         node.intraPacket.processed = 0
         node.intraPacket.noProcessed = 0
         node.intraPacket.lost = False
+        node.header.sentIntra = 0
+        node.intraPacket.sentIntra = 0
         
         #yield env.timeout(beacon_time-wait-node.packet.rectime)
         if trySend:
@@ -578,17 +625,23 @@ env.run(until=600)
 
 sent = sum(n.sent for n in nodes)
 print ("\nRESULTS....")
+print ("Number of nodes simulated (nrNodes): ",nrNodes)
 print ("Number of total sent full-packets (sent)",sent)
+print ("Number of total sent intra-packets (nrSentIntra)",nrSentIntra)
+print ("Number of total received full-packets (nrReceived)",nrReceived)
 #print ("Number of total collided packets (nrCollisions)",nrCollisions)
 
 #print ("Number of total lost packets (due Lpl) (nrLost)",nrLost)
-print ("Number of total lost full-packets due Lpl, or too much on BS or too much intra-packets lost (nrLost + nrLostMaxRec+nrCollFullPacket)",nrLost+nrLostMaxRec+nrCollFullPacket)
+#print ("Number of total lost full-packets due Lpl, or too much on BS or too much intra-packets lost (nrLost + nrLostMaxRec+nrCollFullPacket)",nrLost+nrLostMaxRec+nrCollFullPacket)
+#print ("Number of total no-processed intra packets (header+intrapackets) (nrLostMaxRec)",nrLostMaxRec)
+print ("Number of total packets lost (nrLost)",nrLost)
+print ("Number of total collision full packet (nrCollFullPacket)",nrCollFullPacket)
 print ("Number of total received full-packets (nrReceived)",nrReceived)
 print ("Number of total intra-packets collision: header and intra-packets (nrCollisions)",nrCollisions)
-print ("Number of total full-packets Collision, ie too much intra-packets coll (nrCollFullPacket)",nrCollFullPacket)
+
 #print ("Number of total processed packets (correct demodulation on gw) (nrProcessed)",nrProcessed)
-print ("Number of total processed intra-packets (correct demodulation on gw)",nrIntraTot-nrNoProcessed)
-print ("Number of total NO processed intra-packets (too much pkts on BS on gw)",nrNoProcessed)
+#print ("Number of total processed intra-packets (correct demodulation on gw)",nrIntraTot-nrNoProcessed)
+print ("Number of total NO processed intra-packets (too much pkts on BS on gw) (nrNoProcessed)",nrNoProcessed)
 
 if plots_bar == 1:
     #### BAR PLOTS ####
