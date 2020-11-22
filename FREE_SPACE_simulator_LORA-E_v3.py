@@ -532,7 +532,7 @@ def transmit(env,node):
             global nrCollFullPacket
             if node.header.collided == 3:
                 nrCollFullPacket +=1
-            elif node.intraPacket.collided > (1/3)*0*nIntraPackets:
+            elif node.intraPacket.collided > (1/3)*nIntraPackets:
                 nrCollFullPacket +=1
            
             ##RECEIVED FULL PACKETS
