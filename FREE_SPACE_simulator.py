@@ -449,7 +449,7 @@ def beacon (env):
         print ("{:3.5f} || ***A new beacon has been sended from Satellite***".format(env.now))    
     
 
-###PLEASE UNCOMMENT FOR REGULAR FUNCIONALITY           
+           
 env.process(beacon(env)) ##BEACON SENDER
 
 ### THIS IS GOING TO CREATE NODES AND DO TRAMSMISIONS. IS THE MAIN PROGRAM ###
@@ -468,6 +468,12 @@ print ("Number of total lost packets (due Lpl) (nrLost)",nrLost)
 print ("Number of total processed packets (nrProcessed)",nrProcessed)
 print ("Number of total received packets (correct demodulation on gw) (nrReceived)",nrReceived)
 
+
+
+
+   
+
+#####PLOTTING STUFF ####
 if plots_bar == 1:
     #### BAR PLOTS ####
     data = [sent,nrLost,nrCollisions,nrProcessed,nrReceived]
@@ -489,50 +495,7 @@ if plots_bar == 1:
     plt.show()
     plt.savefig("bar.png")
 
-
-# =============================================================================
-# #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
-# multi_nodes = [5,5,5,5,5,5,5,5,5]
-# plt.figure(figsize=(16, 10), dpi= 80, facecolor='w', edgecolor='k')
-# plt.figure(1)
-# for i in range (8):
-#     env = simpy.Environment()
-#     select_node = multi_nodes[i]
-#     env.process(beacon(env)) ##BEACON SENDER
-#     ### THIS FOR IS GOING TO CREATE NODES AND DO TRAMSMISIONS. IS THE MAIN PROGRAM ###
-#     for i in range(select_node):
-#         node = myNode(i,bsId, avgSendTime, packetlen, total_data)
-#         nodes.append(node)
-#         #print ("ENVVVV",env.now)
-#         env.process(transmit(env,node))
-#     env.run(until=600)
-#     
-#     #### BAR PLOTS ####
-#     data = [sent,nrLost,nrCollisions,nrProcessed,nrReceived]
-#     #plt.figure(figsize=(16, 10), dpi= 80, facecolor='w', edgecolor='k')
-#     fig = plt.subplot(3,3,i)
-#     x = ["Sent","Lost(Lpl)","Collided","Processed","Received"]
-#     #y_pos = np.arange(len(x))
-#     plt.bar(x, data, color=["darkgreen","red","red","seagreen","springgreen"], width=0.25)
-#     plt.title("N° nodes: %i"%multi_nodes[i])
-#     plt.xlabel('Packets')
-#     plt.ylabel('N° of packets')
-#     axes = plt.gca()
-#     #axes.set_xlim([0,xmax])
-#     axes.set_ylim([0,1500])
-#     #plt.ylim(100)
-#     #yint = range(min(sf_dist), math.ceil(max(sf_dist))+1)
-#     #plt.yticks(yint)
-#     #plt.grid()
-#     
-# 
-# plt.show()
-# plt.savefig("bar.png")
-# =============================================================================
-    
-
-
-### PARAMETERS FOR PLOTING ###
+### PARAMETERS FOR PLOTTING ###
 ###BEST NODE
 node_best = int(np.where(Prx == np.amax(Prx))[0])
 ###WORST NODE

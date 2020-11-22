@@ -33,7 +33,7 @@ import re
 
 ####WE START BY USING SF=12 ADN BW=125 AND CR=1, FOR ALL NODES AND ALL TRANSMISIONS######
 ####WE ALSO CONSIDER SIMPLE CHECK, WHERE TWO PACKETS COLLIDE WHEN THEY ARRIVE AT: SAME TIME, SAME FREQUENCY AND SAME SF####
-nrNodes = 500 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
+nrNodes = 10 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
 #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
 RANDOM_SEED = 6
 random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUMBERS (ie SAME RESULTS OF SIMULATION)
@@ -75,6 +75,7 @@ nrIntraTot = 0
 nrLostMaxRec = 0
 nrCollFullPacket = 0
 nrSentIntra = 0 ##TOTAL OF SENT INTRA-PACKTES
+nrReceivedIntra = 0 ##TOTAL OF RECEIVED INTRA-PACKETS
 env = simpy.Environment()
 
 
@@ -486,6 +487,7 @@ def transmit(env,node):
                                 #node.intraPacket.collided+=1 #ALREADY COUNTED ON FUNCTION
                             else:
                                 ###print ("{:3.5f} || ...No Collision for intra-packet {} for node {}!".format(env.now,j,node.nodeid))
+                                node.intraPacket.noCollided +=1
                                 pass
                             packetsAtBS.append(node)
                             node.packet.addTime = env.now
@@ -543,17 +545,22 @@ def transmit(env,node):
             ##NO PROCESSED PACKETS (too much intra-packets on BS)
             global nrNoProcessed
             nrNoProcessed = nrNoProcessed + node.header.noProcessed + node.intraPacket.noProcessed
+            ##TOTAL OF RECEIVED INTRA-PACKETS
+            global nrReceivedIntra
+            nrReceivedIntra = nrReceivedIntra + node.header.noCollided + node.intraPacket.noCollided
         
         ##RESET
         node.header.collided = 0
         node.header.processed = 0
         node.header.noProcessed = 0
         node.header.lost = False
+        node.header.noCollided =0
         node.intraPacket.nrColl = 0
         node.intraPacket.collided = 0
         node.intraPacket.processed = 0
         node.intraPacket.noProcessed = 0
         node.intraPacket.lost = False
+        node.intraPacket.noCollided = 0
         node.header.sentIntra = 0
         node.intraPacket.sentIntra = 0
         if trySend:
@@ -655,15 +662,16 @@ print ("Number of nodes simulated (nrNodes): ",nrNodes)
 print ("Number of total sent full-packets (sent)",sent)
 print ("Number of total sent intra-packets (nrSentIntra)",nrSentIntra)
 print ("Number of total received full-packets (nrReceived)",nrReceived)
+print ("Number of total collision full-packets (nrCollFullPacket)",nrCollFullPacket)
+print ("Number of total intra-packets lost (nrLost)",nrLost)
+print ("Number of total intra-packets collision: header and intra-packets (nrCollisions)",nrCollisions)
+print ("Number of total intra-packets received aprox (not care Processed!)(nrReceivedIntra)",nrReceivedIntra)
 #print ("Number of total collided packets (nrCollisions)",nrCollisions)
 
 #print ("Number of total lost packets (due Lpl) (nrLost)",nrLost)
 #print ("Number of total lost full-packets due Lpl, or too much on BS or too much intra-packets lost (nrLost + nrLostMaxRec+nrCollFullPacket)",nrLost+nrLostMaxRec+nrCollFullPacket)
 #print ("Number of total no-processed intra packets (header+intrapackets) (nrLostMaxRec)",nrLostMaxRec)
-print ("Number of total packets lost (nrLost)",nrLost)
-print ("Number of total collision full packet (nrCollFullPacket)",nrCollFullPacket)
-print ("Number of total received full-packets (nrReceived)",nrReceived)
-print ("Number of total intra-packets collision: header and intra-packets (nrCollisions)",nrCollisions)
+
 
 #print ("Number of total processed packets (correct demodulation on gw) (nrProcessed)",nrProcessed)
 #print ("Number of total processed intra-packets (correct demodulation on gw)",nrIntraTot-nrNoProcessed)
