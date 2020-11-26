@@ -33,7 +33,7 @@ import re
 
 ####WE START BY USING SF=12 ADN BW=125 AND CR=1, FOR ALL NODES AND ALL TRANSMISIONS######
 ####WE ALSO CONSIDER SIMPLE CHECK, WHERE TWO PACKETS COLLIDE WHEN THEY ARRIVE AT: SAME TIME, SAME FREQUENCY AND SAME SF####
-nrNodes = 15 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
+nrNodes = 5 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
 #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
 RANDOM_SEED = 6
 random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUMBERS (ie SAME RESULTS OF SIMULATION)
@@ -54,6 +54,8 @@ total_data = 60 ##TOTAL DATA ON BUFFER, FOR EACH NODE (IT'S THE BUFFER O DATA BE
 
 beacon_time = 120 ###SAT SENDS BEACON EVERY CERTAIN TIME
 back_off = beacon_time * 0.95 ###BACK OFF TIME FOR SEND A PACKET
+back_off = 110 ##NEW BACK-OFF TIME
+
 packetsAtBS = [] ##USED FOR CHEK IF THERE ARE ALREADY PACKETS ON THE SATELLITE
 c = 299792.458 ###SPEED LIGHT [km/s]
 Ptx = 14
@@ -355,6 +357,45 @@ def airtime(sf,cr,pl,bw):
     Tpayload = payloadSymbNB * Tsym
     return ((Tpream + Tpayload)/1000) ##IN SECS
 
+def sendAck (env,node):
+    global sf7,sf8,sf9,sf10,sf11,sf12    
+    #if node.packet.lost == 0 and node.packet.collided ==0:
+    packet_len = 5 ##IS A SMALL PACKET FOR ASKING
+    ack_backoff = airtime(12,1,packet_len,125)
+    #yield env.timeout(ack_backoff)
+    print ("{:3.5f} || Req received from node {}. Sending ACK from Sat...".format(env.now,node.nodeid))
+    rssi = node.packet.rssi[math.ceil(env.now)]
+    print ("{:3.5f} || RSSI for node {} is {} dB...".format(env.now,node.nodeid,rssi))
+    ###SELECTING THE SF FOR DEVICE BASED ON RSSI
+    if rssi > sf7[1]:
+        print ("----Select SF7")
+        node.packet.sf = 7
+    elif rssi > sf8[1]:
+        print ("----Select SF8")
+        node.packet.sf = 8
+    elif rssi > sf9[1]:
+        print ("----Select SF9")
+        node.packet.sf = 9
+    elif rssi > sf10[1]:
+        print ("----Select SF10")
+        node.packet.sf = 10
+    elif rssi > sf11[1]:
+        print ("----Select SF11")
+        node.packet.sf = 11
+    else:
+        print ("----Select S12")
+        node.packet.sf = 12
+    return ack_backoff 
+
+def askSF (env,node):
+    packet_len = 5 ##IS A SMALL PACKET FOR ASKING
+    ask_backoff = airtime(12,1,packet_len,125)
+    print ("{:3.5f} || Node {} sends asking packet...".format(env.now,node.nodeid))
+    #yield env.timeout(wait)
+    return ask_backoff
+                
+            
+    
 
 def transmit(env,node):
     #while nodes[node.nodeid].buffer > 0.0:
@@ -362,6 +403,7 @@ def transmit(env,node):
     global wait_max
     global back_off
     global beacon_time
+    #firstPacket = 0
     while node.buffer > 0.0:
         yield env.timeout(node.packet.rectime + float(node.packet.proptime[math.ceil(env.now)])) ##GIVE TIME TO RECEIVE BEACON
                       
@@ -380,11 +422,28 @@ def transmit(env,node):
                 yield env.timeout(wait)
                 print ("{:3.5f} || Node {} begins to transmit a packet".format(env.now,node.nodeid))
                 trySend = True
-                node.sent = node.sent + 1
-                node.buffer = node.buffer - node.packetlen
+                #global packetlen
+                #node.packet.pl = packetlen
+                
                 if node in packetsAtBS:
                     print ("{} || ERROR: packet is already in...".format(env.now))
                 else:
+                    sensibility = sensi[12 - 7, [125,250,500].index(node.packet.bw) + 1] ##CHECK IF askSF WILL ARRIVE
+                    ask_backoff = askSF(env,node)
+                    yield env.timeout(ask_backoff)
+                    ack_backoff = sendAck(env,node)
+                    yield env.timeout(ack_backoff)
+                    #print ("-----ack_backoff",ack_backoff)
+                    #print ("-----ask_backoff",ask_backoff)
+# =============================================================================
+#                     if ack_backoff and ask_backoff: ##CHECK IF askSF WILL ARRIVE
+#                         yield env.timeout(ack_backoff+ask_backoff)
+# =============================================================================
+                    node.sent = node.sent + 1
+                    node.buffer = node.buffer - node.packetlen
+                    
+                    
+                    
                     sensibility = sensi[node.packet.sf - 7, [125,250,500].index(node.packet.bw) + 1]
                     if node.packet.rssi[math.ceil(env.now)] < sensibility: #HERE WE ARE CONSIDERING RSSI AT TIME ENV.NOW
                         print ("{:3.5f} || Node {}: The Packet will be Lost due Lpl".format(env.now,node.nodeid))
@@ -402,6 +461,7 @@ def transmit(env,node):
                         packetsAtBS.append(node)
                         node.packet.addTime = env.now
                         yield env.timeout(node.packet.rectime)
+                        
         
         if node.packet.lost:
             global nrLost
