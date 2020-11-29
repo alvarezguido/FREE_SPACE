@@ -393,9 +393,7 @@ def askSF (env,node):
     print ("{:3.5f} || Node {} sends asking packet...".format(env.now,node.nodeid))
     #yield env.timeout(wait)
     return ask_backoff
-                
-            
-    
+                             
 
 def transmit(env,node):
     #while nodes[node.nodeid].buffer > 0.0:

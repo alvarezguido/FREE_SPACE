@@ -33,7 +33,7 @@ import re
 
 ####WE START BY USING SF=12 ADN BW=125 AND CR=1, FOR ALL NODES AND ALL TRANSMISIONS######
 ####WE ALSO CONSIDER SIMPLE CHECK, WHERE TWO PACKETS COLLIDE WHEN THEY ARRIVE AT: SAME TIME, SAME FREQUENCY AND SAME SF####
-nrNodes = 5 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
+nrNodes = 50 ##NUMBER OF NODES TO BE SIMULATED (IN ORDER FROM CSV FILE)
 #multi_nodes = [1400,1000,500,250,100,50,25,10,5]
 RANDOM_SEED = 6
 random.seed(RANDOM_SEED) #RANDOM SEED IS FOR GENERATE ALWAYS THE SAME RANDOM NUMBERS (ie SAME RESULTS OF SIMULATION)
@@ -54,6 +54,8 @@ total_data = 60 ##TOTAL DATA ON BUFFER, FOR EACH NODE (IT'S THE BUFFER O DATA BE
 
 beacon_time = 120 ###SAT SENDS BEACON EVERY CERTAIN TIME
 back_off = beacon_time * 0.95 ###BACK OFF TIME FOR SEND A PACKET
+back_off = 110 ##NEW BACK-OFF TIME
+
 packetsAtBS = [] ##USED FOR CHEK IF THERE ARE ALREADY PACKETS ON THE SATELLITE
 c = 299792.458 ###SPEED LIGHT [km/s]
 Ptx = 14
@@ -63,7 +65,8 @@ nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
 freq =868e6 ##USED FOR PATH LOSS CALCULATION
 frequency = [868100000, 868300000, 868500000] ##FROM LORAWAN REGIONAL PARAMETERS EU863-870 / EU868
 #frequency = [868100000,868100000,868100000]
-maxBSReceives = 8 ##MAX NUMBER OF PACKETS THAT BS (ie SATELLITE) CAN RECEIVE AT SAME TIME
+maxBSReceives = 1 ##MAX NUMBER OF PACKETS THAT BS (ie SATELLITE) CAN RECEIVE AT SAME TIME
+
 nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
 nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
 nrProcessed = 0 ##TOTAL OF PROCESSED PACKETS
@@ -153,7 +156,7 @@ def checkcollision(packet):
         if packetsAtBS[i].packet.processed == 1:
             processing = processing + 1
     if (processing > maxBSReceives):
-        print ("{:3.5f} || Too much packets on Base Sattion.. Packet will be lost!", len(packetsAtBS))
+        print ("------{:3.5f} || Too much packets on Base Sattion.. Packet will be lost!", len(packetsAtBS))
         packet.processed = 0
     else:
         packet.processed = 1
@@ -298,11 +301,10 @@ class myPacket():
         global distance
         global channel
         global frequency
-        SF = [7,8,9,10,11,12]
 
         self.nodeid = nodeid
         self.txpow = Ptx
-        self.sf = random.choice(SF)
+        self.sf = 12
         self.cr = 1 ##CODING RATE
         self.bw = 125
         # for experiment 3 find the best setting
@@ -356,6 +358,43 @@ def airtime(sf,cr,pl,bw):
     Tpayload = payloadSymbNB * Tsym
     return ((Tpream + Tpayload)/1000) ##IN SECS
 
+def sendAck (env,node):
+    global sf7,sf8,sf9,sf10,sf11,sf12    
+    #if node.packet.lost == 0 and node.packet.collided ==0:
+    packet_len = 5 ##IS A SMALL PACKET FOR ASKING
+    ack_backoff = airtime(12,1,packet_len,125)
+    #yield env.timeout(ack_backoff)
+    print ("{:3.5f} || Request received from node {}. Sending ACK from Sat...".format(env.now,node.nodeid))
+    rssi = node.packet.rssi[math.ceil(env.now)]
+    #print ("{:3.5f} || RSSI for node {} is {} dB...".format(env.now,node.nodeid,rssi))
+    ###SELECTING THE SF FOR DEVICE BASED ON RSSI
+    if rssi > sf7[1]:
+        #print ("----Select SF7")
+        node.packet.sf = 7
+    elif rssi > sf8[1]:
+        #print ("----Select SF8")
+        node.packet.sf = 8
+    elif rssi > sf9[1]:
+        #print ("----Select SF9")
+        node.packet.sf = 9
+    elif rssi > sf10[1]:
+        #print ("----Select SF10")
+        node.packet.sf = 10
+    elif rssi > sf11[1]:
+        #print ("----Select SF11")
+        node.packet.sf = 11
+    else:
+        #print ("----Select S12")
+        node.packet.sf = 12
+    return ack_backoff 
+
+def askSF (env,node):
+    packet_len = 5 ##IS A SMALL PACKET FOR ASKING
+    ask_backoff = airtime(12,1,packet_len,125)
+    print ("{:3.5f} || Node {} sends asking packet...".format(env.now,node.nodeid))
+    #yield env.timeout(wait)
+    return ask_backoff
+                             
 
 def transmit(env,node):
     #while nodes[node.nodeid].buffer > 0.0:
@@ -363,9 +402,10 @@ def transmit(env,node):
     global wait_max
     global back_off
     global beacon_time
+    #firstPacket = 0
     while node.buffer > 0.0:
         yield env.timeout(node.packet.rectime + float(node.packet.proptime[math.ceil(env.now)])) ##GIVE TIME TO RECEIVE BEACON
-                      
+        node.packet.sf = 12 ##ASSIGN SF=12 TO REACH SAT FOR ASKING PACKET              
         if node in packetsAtBS:
             print ("{:3.5f} || ERROR: packet is already in...".format(env.now))
         else:
@@ -381,29 +421,63 @@ def transmit(env,node):
                 yield env.timeout(wait)
                 print ("{:3.5f} || Node {} begins to transmit a packet".format(env.now,node.nodeid))
                 trySend = True
-                node.sent = node.sent + 1
-                node.buffer = node.buffer - node.packetlen
+                #global packetlen
+                #node.packet.pl = packetlen
+                
                 if node in packetsAtBS:
                     print ("{} || ERROR: packet is already in...".format(env.now))
                 else:
-                    sensibility = sensi[node.packet.sf - 7, [125,250,500].index(node.packet.bw) + 1]
+                    
+                    sensibility = sensi[node.packet.sf - 7, [125,250,500].index(node.packet.bw) + 1] ##CHECK IF askSF WILL ARRIVE
+                    
                     if node.packet.rssi[math.ceil(env.now)] < sensibility: #HERE WE ARE CONSIDERING RSSI AT TIME ENV.NOW
-                        print ("{:3.5f} || Node {}: The Packet will be Lost due Lpl".format(env.now,node.nodeid))
+                        print ("{:3.5f} || Node {}: Asking packet won't arrive to Sat".format(env.now,node.nodeid))
                         node.packet.lost = True ## LOST ONLY CONSIDERING Lpl
                     else:
                         node.packet.lost = False ## LOST ONLY CONSIDERING Lpl
-                        print ("{:3.5f} || Prx for node {} is {:3.2f} dB".format(env.now, node.nodeid, node.packet.rssi[math.ceil(env.now)]))
+                        #print ("{:3.5f} || Prx for node {} is {:3.2f} dB".format(env.now, node.nodeid, node.packet.rssi[math.ceil(env.now)]))
                         #print ("Prx for node",node.nodeid, "is: ",node.packet.rssi[math.ceil(env.now)],"at time",env.now)
-                        print ("{:3.5f} || Let's try if there are collisions...".format(env.now))
+                        #print ("{:3.5f} || Let's try if there are collisions...".format(env.now))
+                        ask_backoff = askSF(env,node)
+                        
                         if (checkcollision(node.packet)==1):
                             node.packet.collided = 1
+                            #node.packet.processed = 0 ##FLUSH PROCESSED
                         else:
                             node.packet.collided = 0
-                            print ("{:3.5f} || ...No Collision by now!".format(env.now))
+                            #node.packet.processed = 0 ##FLUSH PROCESSED
+                            print ("{:3.5f} || ...No Collision by now for asking packet!".format(env.now))
+                        
                         packetsAtBS.append(node)
-                        node.packet.addTime = env.now
-                        yield env.timeout(node.packet.rectime)
-        
+                        node.packet.addTime = env.now   
+                        yield env.timeout(ask_backoff)
+                        
+                        if (node in packetsAtBS):
+                            packetsAtBS.remove(node)
+                        if node.packet.collided == 0 and node.packet.processed == 1:
+                            #node.packet.processed = 0 ##FLUSH PROCESSED
+                            ack_backoff = sendAck(env,node) 
+                            yield env.timeout(ack_backoff)
+                            #print ("----NODE SF",node.packet.sf)
+                            node.sent = node.sent + 1
+                            node.buffer = node.buffer - node.packetlen
+                            #print ("{:3.5f} || Prx for node {} is {:3.2f} dB".format(env.now, node.nodeid, node.packet.rssi[math.ceil(env.now)]))
+                            print ("{:3.5f} || SF {} is asigned to node {}...".format(env.now,node.packet.sf,node.nodeid))
+                            print ("{:3.5f} || Let's try if there are collisions...".format(env.now))
+                            if (checkcollision(node.packet)==1):
+                                node.packet.collided = 1
+                            else:
+                                node.packet.collided = 0
+                                print ("{:3.5f} || ...No Collision by now!".format(env.now))
+                            packetsAtBS.append(node)
+                            node.packet.addTime = env.now
+                            yield env.timeout(node.packet.rectime)
+                        else:
+                            node.packet.processed = 0 ##FLUSH PROCESSED
+                      
+                    
+                        
+    
         if node.packet.lost:
             global nrLost
             nrLost += 1
@@ -414,14 +488,18 @@ def transmit(env,node):
             node.totalColl += 1
         
         
+        #if node.packet.collided == 0 and node.packet.processed == 1 and not node.packet.lost and trySend:
         if node.packet.collided == 0 and node.packet.processed == 1 and not node.packet.lost and trySend:
             global nrReceived
             nrReceived = nrReceived + 1
             node.totalRec += 1
+        
+        
         if node.packet.processed == 1:
             global nrProcessed
             nrProcessed = nrProcessed + 1
             node.totalProc += 1
+       
         # complete packet has been received by base station
         # Let's remove from Base Station
         if (node in packetsAtBS):

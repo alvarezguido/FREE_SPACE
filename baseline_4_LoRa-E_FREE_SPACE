@@ -358,10 +358,11 @@ class myPacket():
         global distance
         global channel
         global frequency
-        SF = [7,8,9,10,11,12]
+        #SF = [7,8,9,10,11,12]
         self.nodeid = nodeid
         self.txpow = Ptx
-        self.sf = random.choice(SF)
+        #self.sf = random.choice(SF)
+        self.sf = 12
         self.cr = 1 ##CODING RATE
         self.bw = 125
         # for experiment 3 find the best setting
