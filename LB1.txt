@@ -15,7 +15,6 @@ sent,nrCollisions,nrLost,nrProcessed,nrReceived
 0.0,5002.0,0.0,0.0,0.0
 0.0,7001.0,0.0,0.0,0.0
 
-
 LB1_3CH
 2020-11-29 10:34:06.375312
 nodes

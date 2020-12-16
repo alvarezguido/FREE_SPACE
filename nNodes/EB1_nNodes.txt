@@ -1,0 +1,31 @@
+
+
+EB1_1CH
+2020-12-01 21:31:09.883597
+nodes
+1400,2000,2500,3000,3500,4000,4500,5000,6000
+sent,nrCollFullPacket,None,None,nrReceived
+7.0,1.0,nan,nan,6.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+
+EB1_3CH
+2020-12-01 22:44:58.233504
+nodes
+1400,2000,2500,3000,3500,4000,4500,5000,6000
+sent,nrCollFullPacket,None,None,nrReceived
+6.0,0.0,nan,nan,6.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0
+0.0,0.0,nan,nan,0.0

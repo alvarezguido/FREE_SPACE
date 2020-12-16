@@ -60,7 +60,7 @@ packetsAtBS = [] ##USED FOR CHEK IF THERE ARE ALREADY PACKETS ON THE SATELLITE
 c = 299792.458 ###SPEED LIGHT [km/s]
 Ptx = 14
 G_device = 0; ##ANTENNA GAIN FOR AN END-DEVICE
-G_sat = 12;   ##ANTENNA GAIN FOR SATELLITE
+G_sat = 5;   ##ANTENNA GAIN FOR SATELLITE
 nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
 freq =868e6 ##USED FOR PATH LOSS CALCULATION
 frequency = [868100000, 868300000, 868500000] ##FROM LORAWAN REGIONAL PARAMETERS EU863-870 / EU868
@@ -143,7 +143,12 @@ Prx = Ptx + G_sat + G_device -20*np.log10(distance*1000) - 20*np.log10(freq) + 1
     ## Prx[i,j]:
         ## i --> the node i
         ## j --> the step time in sat pass 
-
+c7=0
+c8=0
+c9=0
+c10=0
+c11=0
+c12=0
 def simulate_scenario (nrNodes):
     env = simpy.Environment()
     
@@ -361,26 +366,34 @@ def simulate_scenario (nrNodes):
     
     def selectSF (env, node):
         global sf7,sf8,sf9,sf10,sf11,sf12 
+        global c7,c8,c9,c10,c11,c12
         rssi = node.packet.rssi[math.ceil(env.now)]
         #print ("{:3.5f} || RSSI for node {} is {} dB...".format(env.now,node.nodeid,rssi))
         if rssi > sf7[1]:
             #print ("----Select SF7")
             node.packet.sf = 7
+            c7+=1
         elif rssi > sf8[1]:
             #print ("----Select SF8")
             node.packet.sf = 8
+            c8+=1
         elif rssi > sf9[1]:
             #print ("----Select SF9")
             node.packet.sf = 9
+            c9+=1
         elif rssi > sf10[1]:
             #print ("----Select SF10")
             node.packet.sf = 10
+            c10+=1
         elif rssi > sf11[1]:
             #print ("----Select SF11")
             node.packet.sf = 11
+            c11+=1
         else:
             #print ("----Select S12")
             node.packet.sf = 12
+            c12+=1
+        return c7,c8,c9,c10,c11,c12
 
     
     def transmit(env,node):
@@ -390,6 +403,7 @@ def simulate_scenario (nrNodes):
         global back_off
         global beacon_time
         while node.buffer > 0.0:
+            node.packet.sf = 12
             yield env.timeout(node.packet.rectime + float(node.packet.proptime[math.ceil(env.now)])) ##GIVE TIME TO RECEIVE BEACON
                           
             if node in packetsAtBS:
@@ -406,7 +420,7 @@ def simulate_scenario (nrNodes):
                     wait = random.uniform(0,back_off - node.packet.rectime - float(node.packet.proptime[math.ceil(env.now)])) ##TRIGGER BACK-OFF TIME
                     yield env.timeout(wait)
                     print ("{:3.5f} || Node {} begins to transmit a packet".format(env.now,node.nodeid))
-                    selectSF(env,node)
+                    c7,c8,c9,c10,c11,c12 = selectSF(env,node)
                     trySend = True
                     node.sent = node.sent + 1
                     node.buffer = node.buffer - node.packetlen
@@ -457,12 +471,14 @@ def simulate_scenario (nrNodes):
             node.packet.collided = 0
             node.packet.processed = 0
             node.packet.lost = False
+            node.packet.sf = 12
             
             #yield env.timeout(beacon_time-wait-node.packet.rectime)
             if trySend:
                 yield env.timeout(beacon_time-wait-2*node.packet.rectime)
             else:
                 yield env.timeout(beacon_time-wait-node.packet.rectime)
+        #print(c7,c8,c9,c10,c11,c12)
                           
                     
     def beacon (env):
@@ -494,48 +510,48 @@ def simulate_scenario (nrNodes):
 
 
 #multi_nodes = [5,10,15,20]
-
+multi_nodes = [100]
 #############################################################
+###SCENARIO 1 CHANNEL###
+frequency = [868100000] #1 CH
+
+nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
+nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
+nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
+nrProcessed = 0 ##TOTAL OF PROCESSED PACKETS
+nrReceived = 0 ###TOTAL OF RECEIVED PACKETS
+
+i =0
+scenario_1ch = np.zeros((len(multi_nodes),5))
+results = []
+## WHERE:
+    ## scenario_1ch[i,j]:
+        ## i --> the node i
+        ## j --> [sent, nrCollisions, nrLost, nrProcessed, nrReceived]
+
+for nrNodes in multi_nodes:
+    print ("\n\n***NEW SCENARIO BEGINS***\n")
+    results = simulate_scenario(nrNodes)
+    print ("\n**Results for scenario {}**".format(i))
+    print ("Number of total sent packets (sent)",results[0])
+    print ("Number of total collided packets (nrCollisions)",results[1])
+    print ("Number of total lost packets (due Lpl) (nrLost)",results[2])
+    print ("Number of total processed packets (nrProcessed)",results[3])
+    print ("Number of total received packets (correct demodulation on gw) (nrReceived)",results[4])
+    scenario_1ch[i,:] = results
+    i=i+1
+   #nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
+    nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
+    nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
+    nrProcessed = 0 ##TOTAL OF PROCESSED PACKETS
+    nrReceived = 0 ###TOTAL OF RECEIVED PACKETS
+
+###EXPORT scenario_1ch
+
+# save experiment data into a dat file that can be read by e.g. gnuplot
+# name of file would be:  exp0.dat for experiment 0
 # =============================================================================
-# ###SCENARIO 1 CHANNEL###
-# frequency = [868100000] #1 CH
-# 
-# nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
-# nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
-# nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
-# nrProcessed = 0 ##TOTAL OF PROCESSED PACKETS
-# nrReceived = 0 ###TOTAL OF RECEIVED PACKETS
-# 
-# i =0
-# scenario_1ch = np.zeros((len(multi_nodes),5))
-# results = []
-# ## WHERE:
-#     ## scenario_1ch[i,j]:
-#         ## i --> the node i
-#         ## j --> [sent, nrCollisions, nrLost, nrProcessed, nrReceived]
-# 
-# for nrNodes in multi_nodes:
-#     print ("\n\n***NEW SCENARIO BEGINS***\n")
-#     results = simulate_scenario(nrNodes)
-#     print ("\n**Results for scenario {}**".format(i))
-#     print ("Number of total sent packets (sent)",results[0])
-#     print ("Number of total collided packets (nrCollisions)",results[1])
-#     print ("Number of total lost packets (due Lpl) (nrLost)",results[2])
-#     print ("Number of total processed packets (nrProcessed)",results[3])
-#     print ("Number of total received packets (correct demodulation on gw) (nrReceived)",results[4])
-#     scenario_1ch[i,:] = results
-#     i=i+1
-#     nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
-#     nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
-#     nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
-#     nrProcessed = 0 ##TOTAL OF PROCESSED PACKETS
-#     nrReceived = 0 ###TOTAL OF RECEIVED PACKETS
-# 
-# ###EXPORT scenario_1ch
-# 
-# # save experiment data into a dat file that can be read by e.g. gnuplot
-# # name of file would be:  exp0.dat for experiment 0
-# fname = str("LT") + ".txt"
+# fname = str("LT") + ".csv"
 # #print (fname)
 # date = "LT_1CH"+"\n"+str(datetime.datetime.now())+"\n"
 # nods = str(multi_nodes[0])+","+str(multi_nodes[1])+","+str(multi_nodes[2])+","+str(multi_nodes[3])+","+str(multi_nodes[4])\
@@ -569,64 +585,66 @@ def simulate_scenario (nrNodes):
 
 #############################################################
 
-###SCENARIO 3 CHANNELS###
-frequency = [868100000, 868300000, 868500000] ##FROM LORAWAN REGIONAL PARAMETERS EU863-870 / EU868
-
-nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
-nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
-nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
-nrProcessed = 0 ##TOTAL OF PROCESSED PACKETS
-nrReceived = 0 ###TOTAL OF RECEIVED PACKETS
-
-i =0
-scenario_3ch = np.zeros((len(multi_nodes),5))
-results = []
-## WHERE:
-    ## scenario_3ch[i,j]:
-        ## i --> the node i
-        ## j --> [sent, nrCollisions, nrLost, nrProcessed, nrReceived]
-for nrNodes in multi_nodes:
-    print ("\n\n***NEW SCENARIO BEGINS***\n")
-    results = simulate_scenario(nrNodes)
-    print ("\n**Results for scenario {}**".format(i))
-    print ("Number of total sent packets (sent)",results[0])
-    print ("Number of total collided packets (nrCollisions)",results[1])
-    print ("Number of total lost packets (due Lpl) (nrLost)",results[2])
-    print ("Number of total processed packets (nrProcessed)",results[3])
-    print ("Number of total received packets (correct demodulation on gw) (nrReceived)",results[4])
-    scenario_3ch[i,:] = results
-    i=i+1
-    nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
-    nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
-    nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
-    nrProcessed = 0 ##TOTAL OF PROCESSED PACKETS
-    nrReceived = 0 ###TOTAL OF RECEIVED PACKETS
-
-fname = str("LT") + ".txt"
-#print (fname)
-date = "LT_3CH"+"\n"+str(datetime.datetime.now())+"\n"
-nods = str(multi_nodes[0])+","+str(multi_nodes[1])+","+str(multi_nodes[2])+","+str(multi_nodes[3])+","+str(multi_nodes[4])\
-     +","+str(multi_nodes[5])+","+str(multi_nodes[6])+","+str(multi_nodes[7])+","+str(multi_nodes[8])+"\n"
-header = "sent,nrCollisions,nrLost,nrProcessed,nrReceived"
-#if os.path.isfile(fname):
-res = "\n"+ str(scenario_3ch[0,0]) + "," + str(scenario_3ch[0,1]) + "," + str(scenario_3ch[0,2]) + "," + str(scenario_3ch[0,3]) + "," + str(scenario_3ch[0,4]) \
-    + "\n"+ str(scenario_3ch[1,0]) + "," + str(scenario_3ch[1,1]) + "," + str(scenario_3ch[1,2]) + "," + str(scenario_3ch[1,3]) + "," + str(scenario_3ch[1,4]) \
-    + "\n"+ str(scenario_3ch[2,0]) + "," + str(scenario_3ch[2,1]) + "," + str(scenario_3ch[2,2]) + "," + str(scenario_3ch[2,3]) + "," + str(scenario_3ch[2,4]) \
-    + "\n"+ str(scenario_3ch[3,0]) + "," + str(scenario_3ch[3,1]) + "," + str(scenario_3ch[3,2]) + "," + str(scenario_3ch[3,3]) + "," + str(scenario_3ch[3,4]) \
-    + "\n"+ str(scenario_3ch[4,0]) + "," + str(scenario_3ch[4,1]) + "," + str(scenario_3ch[4,2]) + "," + str(scenario_3ch[4,3]) + "," + str(scenario_3ch[4,4]) \
-    + "\n"+ str(scenario_3ch[5,0]) + "," + str(scenario_3ch[5,1]) + "," + str(scenario_3ch[5,2]) + "," + str(scenario_3ch[5,3]) + "," + str(scenario_3ch[5,4]) \
-    + "\n"+ str(scenario_3ch[6,0]) + "," + str(scenario_3ch[6,1]) + "," + str(scenario_3ch[6,2]) + "," + str(scenario_3ch[6,3]) + "," + str(scenario_3ch[6,4]) \
-    + "\n"+ str(scenario_3ch[7,0]) + "," + str(scenario_3ch[7,1]) + "," + str(scenario_3ch[7,2]) + "," + str(scenario_3ch[7,3]) + "," + str(scenario_3ch[7,4]) \
-    + "\n"+ str(scenario_3ch[8,0]) + "," + str(scenario_3ch[8,1]) + "," + str(scenario_3ch[8,2]) + "," + str(scenario_3ch[8,3]) + "," + str(scenario_3ch[8,4]) 
-        
-#else:
-    ##NRTRANSMISSIONS IS TOTAL OF SENT PACKAGES, OR SENT VARIABLE
- #   res = "#randomseed, collType, nrNodes, DataSize, nrTransmissions, nrCollisions, nrlost, nrLostError, nrnoack, nracklost, CollectionTIme, DER1, DER2, OverallEnergy, nodefair1, nodefair2, sfdistribution, slotlengths, framelengths, Guards\n" + str(sys.argv[4]) + ", " + str(full_collision) + ", " + str(nrNodes) + ", " + str(datasize) + ", " + str(sent) + ", "  + str(nrCollisions) + ", "  + str(nrLost) + ", "  + str(nrLostError) + ", " +str(nrNoACK) + ", " +str(nrACKLost) + ", " + str(env.now)+ ", " + str(der1) + ", " + str(der2)  + ", " + str(energy) + ", "  + str(nodefair1) + ", "  + str(nodefair2) + ", "  + str(SFdistribution) + ", "  + str(Slotlengths) + ", "  + str(Framelengths) + ", "  + str(Guards)
-#newres=re.sub('[^#a-zA-Z0-9 \n\.]','',res)
-newres ="\n\n"+ date+"nodes\n"+nods+header+res
-#print (newres)
-with open(fname, "a") as myfile:
-    myfile.write(newres)
-myfile.close()
+# =============================================================================
+# ###SCENARIO 3 CHANNELS###
+# frequency = [868100000, 868300000, 868500000] ##FROM LORAWAN REGIONAL PARAMETERS EU863-870 / EU868
+# 
+# nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
+# nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
+# nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
+# nrProcessed = 0 ##TOTAL OF PROCESSED PACKETS
+# nrReceived = 0 ###TOTAL OF RECEIVED PACKETS
+# 
+# i =0
+# scenario_3ch = np.zeros((len(multi_nodes),5))
+# results = []
+# ## WHERE:
+#     ## scenario_3ch[i,j]:
+#         ## i --> the node i
+#         ## j --> [sent, nrCollisions, nrLost, nrProcessed, nrReceived]
+# for nrNodes in multi_nodes:
+#     print ("\n\n***NEW SCENARIO BEGINS***\n")
+#     results = simulate_scenario(nrNodes)
+#     print ("\n**Results for scenario {}**".format(i))
+#     print ("Number of total sent packets (sent)",results[0])
+#     print ("Number of total collided packets (nrCollisions)",results[1])
+#     print ("Number of total lost packets (due Lpl) (nrLost)",results[2])
+#     print ("Number of total processed packets (nrProcessed)",results[3])
+#     print ("Number of total received packets (correct demodulation on gw) (nrReceived)",results[4])
+#     scenario_3ch[i,:] = results
+#     i=i+1
+#     nodes = [] ###EACH NODE WILL BE APPENDED TO THIS VARIABLE
+#     nrLost = 0 ### TOTAL OF LOST PACKETS DUE Lpl
+#     nrCollisions = 0 ##TOTAL OF COLLIDED PACKETS
+#     nrProcessed = 0 ##TOTAL OF PROCESSED PACKETS
+#     nrReceived = 0 ###TOTAL OF RECEIVED PACKETS
+# 
+# fname = str("LT") + ".csv"
+# #print (fname)
+# date = "LT_3CH"+"\n"+str(datetime.datetime.now())+"\n"
+# nods = str(multi_nodes[0])+","+str(multi_nodes[1])+","+str(multi_nodes[2])+","+str(multi_nodes[3])+","+str(multi_nodes[4])\
+#      +","+str(multi_nodes[5])+","+str(multi_nodes[6])+","+str(multi_nodes[7])+","+str(multi_nodes[8])+"\n"
+# header = "sent,nrCollisions,nrLost,nrProcessed,nrReceived"
+# #if os.path.isfile(fname):
+# res = "\n"+ str(scenario_3ch[0,0]) + "," + str(scenario_3ch[0,1]) + "," + str(scenario_3ch[0,2]) + "," + str(scenario_3ch[0,3]) + "," + str(scenario_3ch[0,4]) \
+#     + "\n"+ str(scenario_3ch[1,0]) + "," + str(scenario_3ch[1,1]) + "," + str(scenario_3ch[1,2]) + "," + str(scenario_3ch[1,3]) + "," + str(scenario_3ch[1,4]) \
+#     + "\n"+ str(scenario_3ch[2,0]) + "," + str(scenario_3ch[2,1]) + "," + str(scenario_3ch[2,2]) + "," + str(scenario_3ch[2,3]) + "," + str(scenario_3ch[2,4]) \
+#     + "\n"+ str(scenario_3ch[3,0]) + "," + str(scenario_3ch[3,1]) + "," + str(scenario_3ch[3,2]) + "," + str(scenario_3ch[3,3]) + "," + str(scenario_3ch[3,4]) \
+#     + "\n"+ str(scenario_3ch[4,0]) + "," + str(scenario_3ch[4,1]) + "," + str(scenario_3ch[4,2]) + "," + str(scenario_3ch[4,3]) + "," + str(scenario_3ch[4,4]) \
+#     + "\n"+ str(scenario_3ch[5,0]) + "," + str(scenario_3ch[5,1]) + "," + str(scenario_3ch[5,2]) + "," + str(scenario_3ch[5,3]) + "," + str(scenario_3ch[5,4]) \
+#     + "\n"+ str(scenario_3ch[6,0]) + "," + str(scenario_3ch[6,1]) + "," + str(scenario_3ch[6,2]) + "," + str(scenario_3ch[6,3]) + "," + str(scenario_3ch[6,4]) \
+#     + "\n"+ str(scenario_3ch[7,0]) + "," + str(scenario_3ch[7,1]) + "," + str(scenario_3ch[7,2]) + "," + str(scenario_3ch[7,3]) + "," + str(scenario_3ch[7,4]) \
+#     + "\n"+ str(scenario_3ch[8,0]) + "," + str(scenario_3ch[8,1]) + "," + str(scenario_3ch[8,2]) + "," + str(scenario_3ch[8,3]) + "," + str(scenario_3ch[8,4]) 
+#         
+# #else:
+#     ##NRTRANSMISSIONS IS TOTAL OF SENT PACKAGES, OR SENT VARIABLE
+#  #   res = "#randomseed, collType, nrNodes, DataSize, nrTransmissions, nrCollisions, nrlost, nrLostError, nrnoack, nracklost, CollectionTIme, DER1, DER2, OverallEnergy, nodefair1, nodefair2, sfdistribution, slotlengths, framelengths, Guards\n" + str(sys.argv[4]) + ", " + str(full_collision) + ", " + str(nrNodes) + ", " + str(datasize) + ", " + str(sent) + ", "  + str(nrCollisions) + ", "  + str(nrLost) + ", "  + str(nrLostError) + ", " +str(nrNoACK) + ", " +str(nrACKLost) + ", " + str(env.now)+ ", " + str(der1) + ", " + str(der2)  + ", " + str(energy) + ", "  + str(nodefair1) + ", "  + str(nodefair2) + ", "  + str(SFdistribution) + ", "  + str(Slotlengths) + ", "  + str(Framelengths) + ", "  + str(Guards)
+# #newres=re.sub('[^#a-zA-Z0-9 \n\.]','',res)
+# newres ="\n\n"+ date+"nodes\n"+nods+header+res
+# #print (newres)
+# with open(fname, "a") as myfile:
+#     myfile.write(newres)
+# myfile.close()
+# =============================================================================
 #received_3ch = scenario_3ch[:,4] / scenario_3ch[:,0]
 #collided_3ch = scenario_3ch[:,1] / scenario_3ch[:,0]

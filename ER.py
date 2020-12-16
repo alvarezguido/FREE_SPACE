@@ -275,8 +275,10 @@ def simulate_scenario (nrNodes):
     class myNode():
         def __init__(self, nodeid, bs, avgSendTime, packetlen, total_data):
             global channel
-            carriers = list(range(280))
-            random.shuffle(carriers) #TO CHOOSE THE HOPPING JUMPS
+            global DR
+            self.dr = random.choice(DR)
+            #carriers = list(range(280))
+            #random.shuffle(carriers) #TO CHOOSE THE HOPPING JUMPS
             self.nodeid = nodeid
             self.avgSendTime = avgSendTime
             self.bs = bs
@@ -288,17 +290,35 @@ def simulate_scenario (nrNodes):
             self.packetlen = packetlen
             self.ch = int(random.choice(channel)) 
             self.packet = myPacket(self.nodeid, packetlen, self.dist)
-            self.freqHop = carriers[0:35]
-            self.header = myHeader(self.nodeid,self.dist,self.ch,self.freqHop)
-            self.intraPacket = myIntraPacket(self.nodeid,self.dist,self.ch,self.freqHop)
+            #self.freqHop = carriers[0:35]
             self.sent = 0 #INITIAL SENT PACKETS
             self.totalLost = 0 #INITIAL TOTAL LOST FOR PARTICULAR NODE
             self.totalColl = 0
             self.totalRec = 0
             self.totalProc = 0
+            if self.dr == "dr8":
+                carriers = list(range(280))
+                random.shuffle(carriers) #TO CHOOSE THE HOPPING JUMPS
+                self.freqHop = carriers[0:35]
+            elif self.dr == "dr9":
+                carriers = list(range(280))
+                random.shuffle(carriers) #TO CHOOSE THE HOPPING JUMPS
+                self.freqHop = carriers[0:35]
+            elif self.dr == "dr10":
+                carriers = list(range(688))
+                random.shuffle(carriers) #TO CHOOSE THE HOPPING JUMPS
+                self.freqHop = carriers[0:86]
+            elif self.dr == "dr11":
+                carriers = list(range(688))
+                random.shuffle(carriers) #TO CHOOSE THE HOPPING JUMPS
+                self.freqHop = carriers[0:86]
+            
+            self.header = myHeader(self.nodeid,self.dist,self.ch,self.freqHop, self.dr)
+            self.intraPacket = myIntraPacket(self.nodeid,self.dist,self.ch,self.freqHop,self.dr)
+            
             
     class myHeader ():
-        def __init__(self,nodeid,dist,ch,freqHop):
+        def __init__(self,nodeid,dist,ch,freqHop,dr):
             global Ptx
             global Prx
             global Lpl
@@ -311,7 +331,6 @@ def simulate_scenario (nrNodes):
             self.transRange = 150
             self.arriveTime = 0
             self.rssi = Prx[nodeid,:]
-            self.freqHopHeader = freqHop[0:3]
             self.rectime = 0.233
             #self.rectime = 1.5
             self.proptime = distance[nodeid,:]*(1/c)
@@ -323,9 +342,18 @@ def simulate_scenario (nrNodes):
             self.lost = bool
             self.subCh = 0
             self.sentIntra = 0
+            if dr == "dr8":
+                self.freqHopHeader = freqHop[0:3]
+            elif dr == "dr9":
+                self.freqHopHeader = freqHop[0:2]
+            elif dr == "dr10":
+                self.freqHopHeader = freqHop[0:3]
+            elif dr == "dr11":
+                self.freqHopHeader = freqHop[0:2]
+        
     
     class myIntraPacket ():
-        def __init__(self,nodeid,dist,ch,freqHop):
+        def __init__(self,nodeid,dist,ch,freqHop,dr):
             global Ptx
             global Prx
             global Lpl
@@ -351,6 +379,14 @@ def simulate_scenario (nrNodes):
             self.lost = bool
             self.subCh = 0
             self.sentIntra = 0
+            if dr == "dr8":
+                self.freqHopIntraPacket = freqHop[3:]
+            elif dr == "dr9":
+                self.freqHopIntraPacket = freqHop[2:]
+            elif dr == "dr10":
+                self.freqHopIntraPacket = freqHop[3:]
+            elif dr == "dr11":
+                self.freqHopIntraPacket = freqHop[2:]
     
     class myPacket():
         def __init__(self, nodeid, packetlen, dist):
@@ -469,7 +505,7 @@ def simulate_scenario (nrNodes):
                             #print ("{:3.5f} || Prx for node {} is {:3.2f} dB".format(env.now, node.nodeid, node.packet.rssi[math.ceil(env.now)]))
                             #print ("Prx for node",node.nodeid, "is: ",node.packet.rssi[math.ceil(env.now)],"at time",env.now)
                            
-                            for i in range(3):
+                            for i in range(len(node.header.freqHopHeader)):
                                 ###print ("{:3.5f} || Sending Header replica {} node {}...".format(env.now,i,node.nodeid))
                                 ###print ("{:3.5f} || Let's try if there are collisions...".format(env.now))
                                 node.header.subCh = node.header.freqHopHeader[i]
@@ -551,15 +587,25 @@ def simulate_scenario (nrNodes):
                 nrCollisions = nrCollisions + node.header.collided + node.intraPacket.collided
                 
                 global nrCollFullPacket
-                if node.header.collided == 3:
-                    nrCollFullPacket +=1
-                elif node.intraPacket.collided > (1/3)*nIntraPackets:
-                    nrCollFullPacket +=1
+                if node.dr =="dr8" or node.dr=="dr10":
+                    if node.header.collided == 3:
+                        nrCollFullPacket +=1
+                    elif node.intraPacket.collided > (1/3)*nIntraPackets:
+                        nrCollFullPacket +=1
+                elif node.dr=="dr9" or node.dr=="dr11":
+                    if node.header.collided == 2:
+                        nrCollFullPacket +=1
+                    elif node.intraPacket.collided > (2/3)*nIntraPackets:
+                        nrCollFullPacket +=1
                
                 ##RECEIVED FULL PACKETS
                 global nrReceived
-                if node.header.noProcessed <3 and node.header.collided <3 and node.intraPacket.noProcessed < (1/3)*nIntraPackets and node.intraPacket.collided < (1/3)*nIntraPackets:
-                    nrReceived +=1
+                if node.dr == "dr8" or node.dr=="dr10":
+                    if node.header.noProcessed <3 and node.header.collided <3 and node.intraPacket.noProcessed < (1/3)*nIntraPackets and node.intraPacket.collided < (1/3)*nIntraPackets:
+                        nrReceived +=1
+                elif node.dr == "dr9" or node.dr=="dr11":
+                    if node.header.noProcessed <2 and node.header.collided <2 and node.intraPacket.noProcessed < (2/3)*nIntraPackets and node.intraPacket.collided < (2/3)*nIntraPackets:
+                        nrReceived +=1
                 
                 ##NO PROCESSED PACKETS (too much intra-packets on BS)
                 global nrNoProcessed
@@ -678,7 +724,8 @@ def simulate_scenario (nrNodes):
     sent = sum(n.sent for n in nodes)
     return (sent,nrCollFullPacket,None,None,nrReceived)
 
-multi_nodes = [10]
+#multi_nodes = [1400]
+DR = ["dr8","dr9","dr10","dr11"]
 ###SCENARIO 1 CHANNEL###
 channel = [0]
 
